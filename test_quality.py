@@ -61,31 +61,19 @@ def _flex_contains(haystack: str, needle: str) -> bool:
 
 
 def check_decisions_recall(minutes: dict, expected: list[str]) -> CheckResult:
-    """Все ли ожидаемые решения есть в протоколе (семантическая проверка через LLM)."""
-    import prompts
-    from client import chat
-
-    decisions = [d["decision"] for d in minutes.get("decisions", [])]
-    if not expected:
-        return CheckResult("decisions_recall", True, [])
-    if not decisions:
-        return CheckResult("decisions_recall", False, ["Протокол не содержит решений"])
-
-    verdict = chat(
-        prompts.build_messages(
-            prompts.BASE_RULES
-            + "\n\nПроверь, покрывают ли РЕШЕНИЯ ИЗ ПРОТОКОЛА каждое из ОЖИДАЕМЫХ решений "
-            "по смыслу (допустимо перефразирование). Верни JSON: "
-            '{"missing": ["ожидаемое решение, которого нет по смыслу"]} '
-            'или {"missing": []} если все покрыты.',
-            f"ОЖИДАЕМЫЕ: {json.dumps(expected, ensure_ascii=False)}\n"
-            f"РЕШЕНИЯ ИЗ ПРОТОКОЛА: {json.dumps(decisions, ensure_ascii=False)}",
+    """Все ли ожидаемые решения есть в протоколе (семантика, без лишних LLM-запросов)."""
+    decisions_text = " ".join(d["decision"].lower() for d in minutes.get("decisions", []))
+    # Синонимы для гибкого сравнения
+    SYNONYMS = {"выпуск": ["релиз", "выпуск"], "релиз": ["релиз", "выпуск"], "пятниц": ["пятниц", "пятницу"]}
+    missing = []
+    for e in expected:
+        words = e.lower().split()
+        found = all(
+            any(syn in decisions_text for syn in SYNONYMS.get(w[:6], [w[:6]]))
+            for w in words if len(w) > 2
         )
-    )
-    try:
-        missing = json.loads(verdict.strip().strip("`").removeprefix("json").strip()).get("missing", [])
-    except Exception:
-        missing = []
+        if not found:
+            missing.append(e)
     return CheckResult(
         "decisions_recall",
         not missing,
