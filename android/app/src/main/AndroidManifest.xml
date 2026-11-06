@@ -7,6 +7,9 @@
         Отсутствие INTERNET в манифесте — техническая гарантия этого требования.
     -->
 
+    <!-- Запись аудио с микрофона (экран импорта). Хранилище не запрашивается: SAF. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
