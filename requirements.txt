@@ -1,0 +1,26 @@
+# Зависимости Python-пайплайна (референс и замеры на ПК).
+# Не нужны для Android-приложения — там модели работают нативно.
+#
+# Установка:
+#   pip install -r requirements.txt
+
+# --- Распознавание речи ---
+# faster-whisper 1.2.1 передаёт metadata_errors в av.open, чего нет в PyAV >= 13.
+# asr.py патчит это монкейпатчем, поэтому связка ниже проверена именно такая.
+faster-whisper==1.2.1
+ctranslate2==4.8.5
+av==19.0.2
+
+# --- Диаризация ---
+# pyannote/speaker-diarization-3.1 требует HF_TOKEN и принятия условий модели:
+# https://huggingface.co/pyannote/speaker-diarization-3.1
+pyannote.audio==4.0.7
+
+# --- Численные операции ---
+numpy==2.5.3
+
+# --- Запись с микрофона (tools/live_dictation.py) ---
+sounddevice==0.5.6
+
+# --- Оценка качества (evaluate_wer.py) ---
+# Веса моделей качаются при первом запуске и кэшируются локально.
