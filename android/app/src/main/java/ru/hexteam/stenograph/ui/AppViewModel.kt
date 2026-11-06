@@ -13,11 +13,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.hexteam.stenograph.BuildConfig
+import ru.hexteam.stenograph.core.Merge
 import ru.hexteam.stenograph.core.Pipeline
 import ru.hexteam.stenograph.core.PipelineStage
-import ru.hexteam.stenograph.core.TranscriptJson
 import ru.hexteam.stenograph.core.TranscriptLine
 import ru.hexteam.stenograph.engine.Stubs
+import ru.hexteam.stenograph.export.Export
 import java.io.File
 
 /**
@@ -200,35 +201,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { UiState(usingStubs = BuildConfig.DEBUG) }
     }
 
-    /** JSON строго по схеме ТЗ. */
-    fun exportJson(): String = TranscriptJson.toJson(_state.value.lines)
+    /** JSON строго по схеме ТЗ. Переименования в экспорт не попадают. */
+    fun exportJson(): String = Export.toJson(_state.value.lines)
 
     /** Читаемый текст с таймкодами. */
-    fun exportText(): String = TranscriptJson.toPlainText(_state.value.lines)
+    fun exportText(): String = Export.toTxt(_state.value.lines, _state.value.speakerLabels)
 
     /** Субтитры SRT. */
-    fun exportSrt(): String = buildString {
-        _state.value.lines.sortedBy { it.startMs }.forEachIndexed { index, line ->
-            appendLine(index + 1)
-            appendLine("${srtTime(line.startMs)} --> ${srtTime(line.endMs)}")
-            appendLine("${labelFor(line.speakerId)}: ${line.text}")
-            appendLine()
-        }
-    }
+    fun exportSrt(): String = Export.toSrt(_state.value.lines, _state.value.speakerLabels)
 
     /** Отображаемое имя говорящего: переименованное или «Спикер N». */
     fun labelFor(speakerId: String): String =
-        _state.value.speakerLabels[speakerId]
-            ?: ru.hexteam.stenograph.core.Merge.humanize(speakerId)
-
-    private fun srtTime(ms: Long): String {
-        val clamped = ms.coerceAtLeast(0)
-        val h = clamped / 3_600_000
-        val m = clamped % 3_600_000 / 60_000
-        val s = clamped % 60_000 / 1000
-        val millis = clamped % 1000
-        return "%02d:%02d:%02d,%03d".format(h, m, s, millis)
-    }
+        _state.value.speakerLabels[speakerId] ?: Merge.humanize(speakerId)
 
     /** Копирует выбранный файл во внутреннее хранилище: движки работают с путём, не с Uri. */
     private suspend fun copyToCache(uri: Uri): String = withContext(Dispatchers.IO) {
