@@ -27,9 +27,12 @@
 │transcribe│  │  diarize   │  │  сшивка  │  │   clean    │
 └────────┘   └────────────┘  └──────────┘  └────────────┘
     │              │              │              │
- whisper.cpp   pyannote/ONNX   алгоритм      llama.cpp
-  (ggml)       или speechbrain  пересечений   + Gemma-2B
+ whisper.cpp   sherpa-onnx    алгоритм      llama.cpp
+ (ggml)      (сегментация +  пересечений   + Qwen2.5-1.5B
+ small int8  спикер-эмбеддинги)              (Q4_K_M)
 ```
+
+Выбор моделей обоснован замерами — см. `docs/ML_MODELS.md`.
 
 ## Основные технические решения
 
