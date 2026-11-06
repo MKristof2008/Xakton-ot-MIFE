@@ -31,10 +31,16 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import ru.hexteam.stenograph.core.Merge
 import ru.hexteam.stenograph.ui.AppViewModel
+import ru.hexteam.stenograph.ui.player.AudioPlayer
 import ru.hexteam.stenograph.ui.theme.speakerColor
 
 /**
@@ -58,6 +65,16 @@ fun ResultScreen(state: AppViewModel.UiState, vm: AppViewModel) {
     var showExport by remember { mutableStateOf(false) }
     var renamingSpeaker by remember { mutableStateOf<String?>(null) }
     var renameText by remember { mutableStateOf("") }
+
+    // Плеер: переход к реплике по тапу, подсветка текущей
+    val scope = rememberCoroutineScope()
+    val player = remember { AudioPlayer(context, scope) }
+    val playerState by player.state.collectAsState()
+
+    DisposableEffect(state.audioUri) {
+        state.audioUri?.let { player.load(it) }
+        onDispose { player.release() }
+    }
 
     // Сохранение JSON в файл через SAF — основной путь сдачи результата.
     val saveJson = rememberLauncherForActivityResult(
@@ -132,6 +149,31 @@ fun ResultScreen(state: AppViewModel.UiState, vm: AppViewModel) {
             singleLine = true,
         )
 
+        // Панель плеера
+        if (playerState.isReady) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(onClick = { player.playPause() }) {
+                    Text(if (playerState.isPlaying) "Пауза" else "Слушать")
+                }
+                Slider(
+                    value = playerState.positionMs.toFloat()
+                        .coerceIn(0f, playerState.durationMs.toFloat().coerceAtLeast(1f)),
+                    valueRange = 0f..playerState.durationMs.toFloat().coerceAtLeast(1f),
+                    onValueChange = { player.seekTo(it.toLong()) },
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = Merge.timecode(playerState.positionMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         // Лента реплик
         if (state.visibleLines.isEmpty()) {
             Text(
@@ -146,11 +188,14 @@ fun ResultScreen(state: AppViewModel.UiState, vm: AppViewModel) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(state.visibleLines) { line ->
+                    val isCurrent = playerState.positionMs in line.startMs until line.endMs
                     TranscriptCard(
                         speakerLabel = vm.labelFor(line.speakerId),
                         speakerId = line.speakerId,
                         startMs = line.startMs,
                         text = line.text,
+                        highlighted = isCurrent,
+                        onClick = { player.seekTo(line.startMs) },
                         onLongClick = {
                             renamingSpeaker = line.speakerId
                             renameText = vm.labelFor(line.speakerId)
@@ -246,18 +291,26 @@ fun ResultScreen(state: AppViewModel.UiState, vm: AppViewModel) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TranscriptCard(
     speakerLabel: String,
     speakerId: String,
     startMs: Long,
     text: String,
+    highlighted: Boolean,
+    onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
     val color = speakerColor(speakerId)
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        colors = CardDefaults.cardColors(
+            containerColor = if (highlighted) MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surface,
+        ),
     ) {
         Row(modifier = Modifier.padding(12.dp)) {
             // Цветная полоса говорящего
