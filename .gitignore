@@ -10,7 +10,7 @@ android/build/
 android/app/build/
 android/local.properties
 android/.idea/
-*.apk
+# *.apk — APK выкладываем в artifacts/ (требование отчётности)
 *.aab
 *.keystore
 *.jks
