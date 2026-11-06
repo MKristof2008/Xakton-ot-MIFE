@@ -8,7 +8,9 @@
 #include <jni.h>
 #include <android/log.h>
 
+#include <chrono>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "whisper.h"
@@ -91,7 +93,8 @@ Java_ru_hexteam_stenograph_engine_WhisperBridge_nativeInit(JNIEnv *env, jobject,
     const char *path = env->GetStringUTFChars(modelPath, nullptr);
 
     whisper_context_params cparams = whisper_context_default_params();
-    cparams.use_gpu = false;  // на телефоне CPU надёжнее
+    cparams.use_gpu = false;      // на телефоне CPU надёжнее
+    cparams.flash_attn = true;    // flash attention: быстрее и меньше памяти на arm64
 
     whisper_context *ctx = whisper_init_from_file_with_params(path, cparams);
     env->ReleaseStringUTFChars(modelPath, path);
@@ -116,7 +119,14 @@ Java_ru_hexteam_stenograph_engine_WhisperBridge_nativeTranscribe(
 
     whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
     params.language = lang;
-    params.n_threads = 4;
+    // whisper.cpp лучше всего масштабируется до ~4 потоков; на 8-ядерных
+    // телефонах большие ядра обычно 4–6. Берём половину ядер, но не меньше 4.
+    const unsigned hw = std::thread::hardware_concurrency();
+    int nThreads = static_cast<int>(hw / 2);
+    if (nThreads < 4) nThreads = 4;
+    if (nThreads > 8) nThreads = 8;
+    params.n_threads = nThreads;
+    LOGI("потоков инференса: %d (ядер: %u)", nThreads, hw);
     params.print_progress = false;
     params.print_realtime = false;
     params.translate = false;
@@ -134,7 +144,15 @@ Java_ru_hexteam_stenograph_engine_WhisperBridge_nativeTranscribe(
         env->ReleaseStringUTFChars(language, lang);
         return nullptr;
     }
-    const int rc = whisper_full(ctx, params, pcm.data(), static_cast<int>(pcm.size()));
+    const int rc = [&]() {
+        const auto tStart = std::chrono::steady_clock::now();
+        const int r = whisper_full(ctx, params, pcm.data(), static_cast<int>(pcm.size()));
+        const auto tEnd = std::chrono::steady_clock::now();
+        const double inferMs = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
+        const double rtf = audioMs > 0 ? inferMs / audioMs : 0.0;
+        LOGI("инференс: %.0f мс на %d мс аудио, RTF=%.2f", inferMs, audioMs, rtf);
+        return r;
+    }();
 
     env->ReleaseStringUTFChars(wavPath, path);
     env->ReleaseStringUTFChars(language, lang);

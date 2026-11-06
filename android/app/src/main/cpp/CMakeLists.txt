@@ -26,5 +26,5 @@ target_link_libraries(whisper_jni
 
 # ARM-оптимизации: на телефоне это даёт основной выигрыш по скорости
 if(ANDROID_ABI STREQUAL "arm64-v8a")
-    target_compile_options(whisper_jni PRIVATE -O3 -mfpu=neon)
+    target_compile_options(whisper_jni PRIVATE -O3)
 endif()
