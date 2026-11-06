@@ -24,7 +24,15 @@ target_link_libraries(whisper_jni
     log
 )
 
-# ARM-оптимизации: на телефоне это даёт основной выигрыш по скорости
+# ARM-оптимизации: на телефоне это даёт основной выигрыш по скорости.
+# Важно: флаги нужны не только JNI-обёртке, но и самой библиотеке whisper
+# (в Debug-сборке весь C++ собирается -O0 — отсюда аномальный RTF).
 if(ANDROID_ABI STREQUAL "arm64-v8a")
-    target_compile_options(whisper_jni PRIVATE -O3)
+    set(ARM_OPT_FLAGS -O3 -march=armv8.2-a+dotprod)
+    foreach(tgt whisper ggml ggml-base ggml-cpu)
+        if(TARGET ${tgt})
+            target_compile_options(${tgt} PRIVATE ${ARM_OPT_FLAGS})
+        endif()
+    endforeach()
+    target_compile_options(whisper_jni PRIVATE ${ARM_OPT_FLAGS})
 endif()

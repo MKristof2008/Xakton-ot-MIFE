@@ -31,6 +31,13 @@ android {
         }
         release {
             isMinifyEnabled = false
+            // Debug-ключом, чтобы APK ставился без отдельной подписи (как в main)
+            signingConfig = signingConfigs.getByName("debug")
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DCMAKE_BUILD_TYPE=Release"
+                }
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
