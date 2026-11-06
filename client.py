@@ -1,5 +1,10 @@
 """Клиент AITunnel (OpenAI-совместимый API) для пайплайна
-«аудио -> транскрипт -> протокол». Читает настройки из .env."""
+«аудио -> транскрипт -> протокол». Читает настройки из .env.
+
+Ключ читается лениво: импорт модуля не требует .env, поэтому локальный
+ASR и диаризация работают без ключа. Ошибка возникает только в момент
+запроса к API.
+"""
 import os
 
 import requests
@@ -9,9 +14,27 @@ import prompts
 
 load_dotenv()
 
-API_KEY = os.environ["AITUNNEL_API_KEY"]
-BASE_URL = os.getenv("AITUNNEL_BASE_URL", "https://api.aitunnel.ru/v1")
-MODEL = os.getenv("AITUNNEL_MODEL", "gpt-4o-mini")
+DEFAULT_BASE_URL = "https://api.aitunnel.ru/v1"
+DEFAULT_MODEL = "gpt-4o-mini"
+
+
+def api_key() -> str:
+    """Ключ AITunnel или понятная ошибка вместо KeyError."""
+    key = os.getenv("AITUNNEL_API_KEY")
+    if not key:
+        raise RuntimeError(
+            "Не задан AITUNNEL_API_KEY. Скопируйте .env.example в .env и впишите "
+            "ключ, либо работайте локально (--backend local без LLM-шагов)."
+        )
+    return key
+
+
+def base_url() -> str:
+    return os.getenv("AITUNNEL_BASE_URL", DEFAULT_BASE_URL)
+
+
+def model_name() -> str:
+    return os.getenv("AITUNNEL_MODEL", DEFAULT_MODEL)
 
 # Цены gpt-4o-mini, $ за 1M токенов (input/output)
 PRICE_IN, PRICE_OUT = 0.15, 0.60
@@ -48,9 +71,13 @@ def chat(messages: list[dict], model: str | None = None, temperature: float = 0.
 
     t0 = time.monotonic()
     r = requests.post(
-        f"{BASE_URL}/chat/completions",
-        headers={"Authorization": f"Bearer {API_KEY}"},
-        json={"model": model or MODEL, "messages": messages, "temperature": temperature},
+        f"{base_url()}/chat/completions",
+        headers={"Authorization": f"Bearer {api_key()}"},
+        json={
+            "model": model or model_name(),
+            "messages": messages,
+            "temperature": temperature,
+        },
         timeout=120,
     )
     r.raise_for_status()

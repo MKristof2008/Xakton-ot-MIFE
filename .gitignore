@@ -2,3 +2,24 @@
 __pycache__/
 *.pyc
 .venv/
+.pytest_cache/
+
+# Веса ECAPA и кэш моделей
+.ecapa_cache/
+
+# Артефакты прогонов
+*.hex.json
+
+# Контрольный набор: WAV весят 11 МБ, в git их не кладём.
+# Набор воспроизводится скриптом `py make_testdata.py`.
+testdata/*.wav
+.testdata_work/
+
+# Android
+android/app/src/main/assets/models/*.bin
+android/app/src/main/cpp/whisper.cpp/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.cxx/

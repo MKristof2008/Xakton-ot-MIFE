@@ -1,0 +1,9 @@
+# Модель весит ~150 МБ — качается отдельно, см. README
+app/src/main/assets/models/*.bin
+app/src/main/cpp/whisper.cpp/
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+.cxx/

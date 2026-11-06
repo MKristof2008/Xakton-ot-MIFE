@@ -1,0 +1,42 @@
+[
+ {
+  "start": 0.0,
+  "end": 7.293,
+  "speaker": "A"
+ },
+ {
+  "start": 7.793,
+  "end": 13.097,
+  "speaker": "A"
+ },
+ {
+  "start": 13.597,
+  "end": 20.076,
+  "speaker": "A"
+ },
+ {
+  "start": 20.576,
+  "end": 25.61,
+  "speaker": "A"
+ },
+ {
+  "start": 26.11,
+  "end": 31.553,
+  "speaker": "A"
+ },
+ {
+  "start": 32.053,
+  "end": 36.927,
+  "speaker": "A"
+ },
+ {
+  "start": 37.427,
+  "end": 42.791,
+  "speaker": "A"
+ },
+ {
+  "start": 43.291,
+  "end": 47.924,
+  "speaker": "A"
+ }
+]

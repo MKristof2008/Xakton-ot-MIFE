@@ -1,19 +1,18 @@
 """Пайплайн «аудио -> транскрипт -> протокол» поверх client.py.
 
 Этапы:
-1. transcribe_audio — аудиофайл -> текст через AITunnel Whisper
+1. transcribe_audio — аудиофайл -> текст с таймкодами и спикерами
+   (asr.py + диаризация из diarize.py)
 2. clean_transcript — исправление ошибок ASR
 3. make_minutes — протокол; для длинных транскриптов map-reduce
    (CHUNK_PROMPT по фрагментам, MERGE_PROMPT для объединения)
 4. ask — вопрос к записи по фрагментам (QA_PROMPT)
 """
 import json
-import os
-
-import requests
 
 import prompts
-from client import API_KEY, BASE_URL, chat
+from speecher import DEFAULT_LANGUAGE
+from client import chat
 
 # Порог длины транскрипта (символов), после которого включается map-reduce
 CHUNK_SIZE = 12_000
@@ -70,31 +69,34 @@ def extract_tasks(text: str) -> dict:
     return json.loads(_strip_markdown(raw))
 
 
-def transcribe_audio(audio_path: str, model: str | None = None) -> str:
-    """Аудиофайл -> текст через /audio/transcriptions (Whisper-совместимый API)."""
-    with open(audio_path, "rb") as f:
-        r = requests.post(
-            f"{BASE_URL}/audio/transcriptions",
-            headers={"Authorization": f"Bearer {API_KEY}"},
-            files={"file": (os.path.basename(audio_path), f)},
-            data={
-                "model": model or os.getenv("AITUNNEL_STT_MODEL", "whisper-1"),
-                "response_format": "verbose_json",
-                "timestamp_granularities[]": "segment",
-            },
-            timeout=600,
-        )
-    r.raise_for_status()
-    data = r.json()
-    segments = data.get("segments")
-    if not segments:
-        return data.get("text", "")
-    lines = []
-    for seg in segments:
-        start = int(seg.get("start", 0))
-        ts = f"[{start // 60:02d}:{start % 60:02d}]"
-        lines.append(f"{ts} {seg.get('text', '').strip()}")
-    return "\n".join(lines)
+def transcribe_audio(audio_path: str, model: str | None = None,
+                     backend: str | None = None,
+                     num_speakers: int | None = None,
+                     embedding: str | None = None,
+                     language: str | None = None,
+                     diarization: bool = True,
+                     return_result: bool = False):
+    """Аудиофайл -> текст `[MM:SS] Спикер N: ...`.
+
+    backend — "local" (faster-whisper, по умолчанию) или "aitunnel";
+    embedding — "ecapa" (точнее) или "mfcc" (без torch/весов).
+    При return_result=True возвращает (transcript, diarization_result).
+    """
+    import speecher as asr
+
+    transcript, result = asr.run(
+        audio_path,
+        backend=backend or "local",
+        num_speakers=num_speakers,
+        language=language or DEFAULT_LANGUAGE,
+        model=model,
+        diarization=diarization,
+        embedding=embedding,
+    )
+    text = transcript.as_text(with_speaker=diarization)
+    if return_result:
+        return text, result
+    return text
 
 
 def clean_transcript(transcript: str) -> str:

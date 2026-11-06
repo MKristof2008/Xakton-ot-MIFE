@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Нейро-стенографист</string>
+    <string name="pick_audio">Выбрать аудио</string>
+    <string name="export_json">Экспорт JSON</string>
+
+    <string name="status_idle">Выберите аудиофайл для расшифровки</string>
+    <string name="status_converting">Конвертация аудио…</string>
+    <string name="status_convert_failed">Не удалось прочитать файл. Поддерживаются mp3, m4a, wav.</string>
+    <string name="status_loading_model">Загрузка модели…</string>
+    <string name="status_model_missing">Модель не найдена в assets/models/ggml-base.bin</string>
+    <string name="status_transcribing">Распознавание речи…</string>
+    <string name="status_empty">Речь не распознана</string>
+    <string name="status_done">Готово: %1$d реплик из %2$s</string>
+</resources>

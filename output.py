@@ -15,6 +15,9 @@ import re
 
 from prompts import to_hex_format
 
+# Допуск на округление при проверке, что сегмент не выходит за конец записи.
+END_TOLERANCE_MS = 250
+
 
 def merge_adjacent(segments: list[dict], max_gap_ms: int = 300,
                    max_len_ms: int = 15000) -> list[dict]:
@@ -46,8 +49,14 @@ def normalize_speakers(segments: list[dict]) -> list[dict]:
     return segments
 
 
-def validate_hex(data: dict) -> list[str]:
-    """Проверяет JSON на соответствие HEX-схеме. Возвращает список ошибок (пусто = ок)."""
+def validate_hex(data: dict, duration_ms: int | None = None) -> list[str]:
+    """Проверяет JSON на соответствие HEX-схеме. Возвращает список ошибок (пусто = ок).
+
+    duration_ms — длительность аудио. Если известна, проверяется и физика:
+    сегмент не может начинаться или кончаться за пределами записи. Схемная
+    проверка такой случай пропускала, и галлюцинация Whisper («Thank you for
+    watching.» на 123-127с при 123.8с аудио) доходила до финального JSON.
+    """
     errors = []
     if not isinstance(data, dict) or "transcript" not in data:
         return ["нет ключа 'transcript'"]
@@ -63,19 +72,38 @@ def validate_hex(data: dict) -> list[str]:
             errors.append(f"сегмент {i}: start_ms/end_ms должны быть int")
         elif seg["end_ms"] <= seg["start_ms"]:
             errors.append(f"сегмент {i}: end_ms <= start_ms")
+        elif duration_ms is not None:
+            if seg["start_ms"] < 0:
+                errors.append(f"сегмент {i}: start_ms отрицательный")
+            if seg["end_ms"] > duration_ms + END_TOLERANCE_MS:
+                errors.append(
+                    f"сегмент {i}: кончается на {seg['end_ms']} мс, "
+                    f"а запись длится {duration_ms} мс"
+                )
     return errors
 
 
-def build_result(segments: list[dict]) -> dict:
-    """Полный пайплайн постобработки: нормализация спикеров -> склейка -> HEX-JSON."""
+def build_result(segments: list[dict], duration_ms: int | None = None,
+                 drop_out_of_bounds: bool = True) -> dict:
+    """Полный пайплайн постобработки: нормализация спикеров -> склейка -> HEX-JSON.
+
+    duration_ms — длительность аудио; если задана, сегменты за её пределами
+    отбрасываются как галлюцинации (drop_out_of_bounds=True).
+    """
+    if duration_ms is not None and drop_out_of_bounds:
+        segments = [
+            s for s in segments
+            if s.get("end_ms", 0) > 0 and s.get("start_ms", 0) < duration_ms
+            and s.get("end_ms", 0) <= duration_ms + END_TOLERANCE_MS
+        ]
     segments = normalize_speakers(segments)
     segments = merge_adjacent(segments)
     return to_hex_format(segments)
 
 
-def save_result(data: dict, path: str) -> None:
+def save_result(data: dict, path: str, duration_ms: int | None = None) -> None:
     """Сохраняет JSON с валидацией. Падает с ошибкой, если схема нарушена."""
-    errors = validate_hex(data)
+    errors = validate_hex(data, duration_ms)
     if errors:
         raise ValueError("HEX-JSON невалиден:\n" + "\n".join(errors))
     with open(path, "w", encoding="utf-8") as f:

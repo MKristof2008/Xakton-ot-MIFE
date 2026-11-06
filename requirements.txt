@@ -1,3 +1,19 @@
+# Базовый минимум: ASR локально + диаризация, без облачных API
 requests
 python-dotenv
 fpdf2
+
+# ASR: faster-whisper (CTranslate2), модель скачивается при первом запуске
+faster-whisper
+
+# Декодирование аудио: даёт ffmpeg, если его нет в системе
+imageio-ffmpeg
+
+# Диаризация: эмбеддинги говорящего ECAPA-TDNN через speechbrain.
+# Без этих пакетов диаризация работает на MFCC (DIARIZATION_BACKEND=mfcc).
+torch
+speechbrain
+
+# Опционально: pyannote/speaker-diarization-3.1 — лучший DER, но модель
+# gated и требует принятых условий + HF_TOKEN. Раскомментируйте, если нужен.
+# pyannote.audio
