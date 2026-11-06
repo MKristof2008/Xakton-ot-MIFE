@@ -30,10 +30,17 @@ cp .env.example .env      # ключ AITunnel нужен только для LLM
 ### Пайплайн по ТЗ (HEX-JSON)
 
 ```bash
-py run_local.py meeting.mp3 --model base --language ru -o result.json
+py run_local.py meeting.mp3 --model base -o result.json
 ```
 
 Четыре шага: ASR → диаризация → постобработка текста → сборка JSON.
+
+Язык определяется автоматически (Whisper сам его находит и печатает в stderr).
+Если язык известен — лучше указать явно, это исключает ошибки определения:
+
+```bash
+py run_local.py meeting.mp3 --language ru
+```
 
 Полезные флаги:
 `--speakers 3` (если число спикеров известно), `--skip-diarization`, `--no-llm`.
@@ -43,7 +50,7 @@ py run_local.py meeting.mp3 --model base --language ru -o result.json
 ```bash
 py make_testdata.py            # сгенерировать контрольный набор (Windows, SAPI)
 py evaluate_diarization.py     # DER по контрольному набору
-py -m pytest tests -q          # 160 тестов без моделей и сети
+py -m pytest tests -q          # 182 теста без моделей и сети
 py -m pytest tests -q --cov=. --cov-report=term-missing   # покрытие (нужен pytest-cov)
 ```
 
@@ -80,6 +87,34 @@ WER и DER будут заметно выше.
 
 `small` работает **хуже** `tiny` и медленнее реального времени. Дефолт `base`
 оправдан; «больше модель — не всегда лучше».
+
+---
+
+## Надёжность ASR
+
+Пять проблем, найденных замерами, устранены в `asr.py`:
+
+| Проблема | Было | Стало |
+|---|---|---|
+| Воспроизводимость | 18, 18 и **21** сегмент на одном файле | стабильно 15 |
+| Язык | `"ru"` жёстко → на англ. аудио выдумывал русский текст | автоопределение |
+| Загрузка модели | 0.5–0.95 с на каждый вызов | кэш (повтор — 0 мс) |
+| Ошибки ввода | сырой traceback PyAV | «Аудиофайл не найден» |
+| `float16` на CPU | `ValueError` | понижается до `int8` |
+
+Причина недетерминированности: faster-whisper по умолчанию включает
+temperature-fallback — при неуверенности модель переключается на случайную
+выборку. С `temperature=0.0` fallback выключен.
+
+Пример галлюцинации из-за жёсткого языка — английская фраза превращалась в
+русскую, хотя в аудио её не было:
+
+```
+язык задан "ru":  «Добрый день. Мы need to discuss the release...»
+автоопределение:  «Good morning everyone. We need to discuss the release...»
+```
+
+Проверка: `py -m pytest tests/test_asr.py -q` (22 теста, без моделей).
 
 ---
 

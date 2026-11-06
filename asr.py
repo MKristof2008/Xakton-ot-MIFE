@@ -41,6 +41,16 @@ _patch_pyav_compat()
 # Размер модели по умолчанию: base — компромисс скорость/качество для Android-порта.
 DEFAULT_MODEL_SIZE = "base"
 
+# Детерминизм. По умолчанию faster-whisper включает temperature-fallback: при
+# неуверенности модель переключается на случайную выборку. На замерах один и
+# тот же файл давал 18, 18 и 21 сегмент — демонстрация не воспроизводилась.
+# С temperature=0.0 fallback выключен, результат стабилен (16, 16, 16).
+TEMPERATURE = 0.0
+
+# Кэш загруженных моделей: загрузка base стоит 0.5-0.95 с, и при обработке
+# нескольких файлов это чистая потеря.
+_MODEL_CACHE: dict[tuple[str, str, str], object] = {}
+
 # --- Пороги фильтра галлюцинаций ---
 # Замерено на контрольном наборе (43 сегмента): у настоящей речи
 # no_speech_prob не превышал 0.063, у галлюцинации был 0.938.
@@ -113,30 +123,110 @@ def is_hallucination(seg, duration: float | None = None) -> tuple[bool, str]:
     return False, ""
 
 
-def transcribe(audio_path: str, model_size: str = DEFAULT_MODEL_SIZE,
-               language: str = "ru", device: str = "auto",
-               compute_type: str = "int8", drop_hallucinations: bool = True,
-               on_drop=None) -> list[dict]:
-    """Возвращает сегменты с таймкодами в миллисекундах.
+def cuda_available() -> bool:
+    """Есть ли GPU, пригодный для CTranslate2."""
+    try:
+        import ctranslate2
 
-    device: "auto" | "cpu" | "cuda". compute_type: "int8" (быстро) | "float16" (GPU).
-    drop_hallucinations=False отключает фильтр (для сравнения и отладки).
-    on_drop(причина, текст) вызывается на каждом отброшенном сегменте.
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
+
+def _cuda_available() -> bool:
+    """Совместимый псевдоним (мог использоваться снаружи)."""
+    return cuda_available()
+
+
+def resolve_device(device: str = "auto") -> str:
+    """auto -> cuda, если он есть, иначе cpu."""
+    if device == "auto":
+        return "cuda" if cuda_available() else "cpu"
+    return device
+
+
+def resolve_compute_type(compute_type: str, device: str) -> str:
+    """float16 работает только на GPU; на CPU он падает с ValueError.
+
+    В docstring float16 был указан как допустимый без оговорок, и вызов на CPU
+    падал сырым ValueError. Теперь неподходящий тип молча понижается до int8
+    на CPU и до float16 на GPU, если запрошен auto.
+    """
+    if compute_type == "auto":
+        return "float16" if device == "cuda" else "int8"
+    if device == "cpu" and compute_type in {"float16", "int8_float16"}:
+        return "int8"
+    return compute_type
+
+
+def load_model(model_size: str | None = None, device: str = "auto",
+               compute_type: str = "auto"):
+    """Загружает модель с кэшированием по (размер, устройство, тип вычислений).
+
+    Раньше модель грузилась на каждый вызов transcribe(): 0.5-0.95 с потерь
+    на base при пакетной обработке.
     """
     from faster_whisper import WhisperModel
 
-    if device == "auto":
-        device = "cuda" if _cuda_available() else "cpu"
+    model_size = model_size or DEFAULT_MODEL_SIZE
+    device = resolve_device(device)
+    compute_type = resolve_compute_type(compute_type, device)
+
+    key = (model_size, device, compute_type)
+    cached = _MODEL_CACHE.get(key)
+    if cached is not None:
+        return cached
+
     model = WhisperModel(model_size, device=device, compute_type=compute_type)
+    _MODEL_CACHE[key] = model
+    return model
+
+
+def clear_model_cache() -> None:
+    """Освобождает закэшированные модели (нужно в тестах и при смене настроек)."""
+    _MODEL_CACHE.clear()
+
+
+def _validate_input(audio_path: str) -> None:
+    """Понятные ошибки вместо сырых исключений PyAV."""
+    import os
+
+    if not os.path.exists(audio_path):
+        raise FileNotFoundError(f"Аудиофайл не найден: {audio_path}")
+    if os.path.getsize(audio_path) == 0:
+        raise ValueError(f"Файл пустой: {audio_path}")
+
+
+def transcribe(audio_path: str, model_size: str = DEFAULT_MODEL_SIZE,
+               language: str | None = None, device: str = "auto",
+               compute_type: str = "auto", drop_hallucinations: bool = True,
+               word_timestamps: bool = False, on_drop=None,
+               temperature: float = TEMPERATURE) -> list[dict]:
+    """Возвращает сегменты с таймкодами в миллисекундах.
+
+    language: None (по умолчанию) — автоопределение. Раньше по умолчанию было
+        "ru", и на английском аудио модель выдумывала русские фразы:
+        «Good morning everyone» превращалось в «Добрый день. Мы need to discuss».
+    device: "auto" | "cpu" | "cuda".
+    compute_type: "auto" | "int8" | "float16". float16 на CPU понижается до int8.
+    temperature: 0.0 — детерминированный результат (по умолчанию).
+    word_timestamps: добавить пословные таймкоды (~+19% времени).
+    drop_hallucinations=False отключает фильтр (для сравнения и отладки).
+    on_drop(причина, текст) вызывается на каждом отброшенном сегменте.
+    """
+    _validate_input(audio_path)
+    model = load_model(model_size, device, compute_type)
 
     duration = audio_duration_sec(audio_path) if drop_hallucinations else None
 
-    segments, _info = model.transcribe(
+    segments, info = model.transcribe(
         audio_path,
         language=language,
         vad_filter=True,  # вырезает тишину, ускоряет и улучшает границы
         beam_size=5,
         condition_on_previous_text=False,  # меньше зацикливания на своей же истории
+        temperature=temperature,
+        word_timestamps=word_timestamps,
     )
 
     result = []
@@ -150,20 +240,24 @@ def transcribe(audio_path: str, model_size: str = DEFAULT_MODEL_SIZE,
                 if on_drop:
                     on_drop(reason, text)
                 continue
-        result.append({
+        item = {
             "start_ms": int(seg.start * 1000),
             "end_ms": int(seg.end * 1000),
             "text": text,
-        })
+        }
+        if word_timestamps and getattr(seg, "words", None):
+            item["words"] = [
+                {"start_ms": int(w.start * 1000), "end_ms": int(w.end * 1000),
+                 "word": w.word}
+                for w in seg.words if w.start is not None and w.end is not None
+            ]
+        result.append(item)
+
+    # Язык, который определила модель: полезно, если language=None
+    detected = getattr(info, "language", None)
+    if detected:
+        transcribe.last_language = detected
     return result
-
-
-def _cuda_available() -> bool:
-    try:
-        import ctranslate2
-        return ctranslate2.get_cuda_device_count() > 0
-    except Exception:
-        return False
 
 
 if __name__ == "__main__":

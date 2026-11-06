@@ -45,7 +45,8 @@ def main() -> None:
     parser.add_argument("--speakers", type=int, default=None, help="число спикеров (если известно)")
     parser.add_argument("--skip-diarization", action="store_true", help="пропустить диаризацию")
     parser.add_argument("--no-llm", action="store_true", help="пропустить постобработку текста")
-    parser.add_argument("--language", default="ru", help="язык записи (по умолчанию ru)")
+    parser.add_argument("--language", default=None,
+                        help="язык записи: ru, en и т.д. Без флага — автоопределение")
     parser.add_argument("-o", "--output", default=None, help="куда сохранить JSON")
     args = parser.parse_args()
 
@@ -57,6 +58,9 @@ def main() -> None:
     print("[1/4] Распознавание речи...", file=sys.stderr)
     from asr import transcribe
     segments = transcribe(args.audio, model_size=args.model, language=args.language)
+    if args.language is None:
+        print(f"      язык определён: {getattr(transcribe, 'last_language', '?')}",
+              file=sys.stderr)
     print(f"      {len(segments)} сегментов", file=sys.stderr)
 
     # 2. Диаризация
