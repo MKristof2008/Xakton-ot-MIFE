@@ -5,14 +5,12 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
-
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
+        flatDir { dirs("app/libs") }
     }
 }
-
-rootProject.name = "NeuroSteng"
+rootProject.name = "NeuroStenograf"
 include(":app")

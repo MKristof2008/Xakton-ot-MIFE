@@ -1,73 +1,99 @@
-# Android-приложение (пункт 6 ТЗ)
+# Нейро-стенографист — Android-приложение
 
-## Статус: исходники готовы, сборка НЕ проверена
+Локальная расшифровка диалогов: речь → текст, кто говорит, таймкоды, экспорт JSON.
+**Всё считается на устройстве, сеть не используется.**
 
-В этом окружении нет Android SDK, Gradle и JDK нужной версии
-(стоит Java 8, нужна 17+), поэтому APK не собран и не запускался.
-Ниже — рабочий каркас проекта; сборку нужно выполнить на машине
-с Android Studio.
+| | |
+|---|---|
+| Пакет | `ru.mifi.stenograf` |
+| minSdk / targetSdk | 26 / 34 |
+| ABI | `arm64-v8a` |
+| Размер APK | ~235 МБ (модели внутри, чтобы работало без сети сразу после установки) |
+| Разрешения | **ни одного сетевого** — `INTERNET` и `ACCESS_NETWORK_STATE` удалены из манифеста |
 
-## Важное ограничение: faster-whisper на Android не работает
+## Сборка
 
-Проверено по индексу PyPI: у `ctranslate2` (ядро faster-whisper) **нет
-Android-колёс** — только `manylinux` и `win`. То есть Python-пайплайн
-из корня репозитория (`asr.py`, `diarization.py`) на устройство
-напрямую не переносится.
+```bash
+cd android
+./scripts/build.sh          # скачает библиотеки (~70 МБ) и модели (~200 МБ), прогонит тесты, соберёт APK
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
-Реальные варианты:
+Или по шагам:
 
-| Вариант | Плюсы | Минусы |
+```bash
+./scripts/fetch_libs.sh     # sherpa-onnx.aar + onnxruntime-genai.aar -> app/libs
+./scripts/fetch_models.sh   # whisper-base int8 + pyannote-seg + 3D-Speaker -> assets
+./gradlew testDebugUnitTest assembleDebug
+```
+
+Требуется JDK 17+ и Android SDK (platform 34, build-tools 34.0.0). Сборка проверена:
+Gradle 8.7, AGP 8.5.2, Kotlin 2.0.21.
+
+## Пайплайн
+
+```
+аудиофайл (SAF, content://)
+   ↓ AudioDecoder      MediaCodec/MediaExtractor → PCM float32 16 кГц моно
+   ↓ AsrEngine         sherpa-onnx + Whisper base int8, language=ru, окна 20 с / перекрытие 2 с
+   ↓ Diarizer          sherpa-onnx: pyannote segmentation-3.0 + 3D-Speaker ERes2Net + кластеризация
+   ↓ Merge             разрезание сегментов по смене говорящего, склейка, нумерация speaker_N
+   ↓ LlmPost           ONNX Runtime GenAI: пунктуация и регистр (опционально, с защитой от галлюцинаций)
+   ↓ HexJson           JSON по схеме ТЗ + валидатор
+```
+
+| Модуль | Файл | Что делает |
 |---|---|---|
-| **whisper.cpp через JNI** (выбран) | работает нативно, реально собирается под arm64 | нужна своя C++-обвязка |
-| ONNX Runtime Mobile + whisper-onnx | проще интеграция | тяжелее артефакты |
-| Chaquopy + пересборка ctranslate2 | остаётся Python | нужна сборка ctranslate2 под Android, нет готовых колёс |
+| Декодер | `audio/AudioDecoder.kt` | любой формат → 16 кГц моно, ресемплинг, нормализация |
+| ASR | `asr/AsrEngine.kt` | распознавание, таймкоды от начала файла |
+| Диаризация | `diar/Diarizer.kt` | сегментация + эмбеддинги + кластеризация |
+| Слияние | `output/Merge.kt` | порт `diarization.py::_best_speaker`, `output.py::merge_adjacent`, `normalize_speakers` |
+| Экспорт | `output/HexJson.kt` | JSON + валидатор (порт `output.py::validate_hex`) |
+| Локальная LLM | `llm/LlmPost.kt` | пунктуация; откат при потере слов или росте длины > 30 % |
+| UI | `ui/*.kt` | импорт → прогресс → результат → экспорт |
 
-Поэтому в `app/src/main/cpp` лежит JNI-обвязка над whisper.cpp: это
-единственный путь, который действительно доедет до APK без пересборки
-всей экосистемы.
+## Модели
 
-## Структура
+| Модель | Файл в `assets/models` | Размер | Лицензия |
+|---|---|---|---|
+| Whisper base int8 (multilingual) | `asr/whisper-base-*.onnx` | 152 МБ | MIT |
+| pyannote segmentation 3.0 | `diar/segmentation-3.0.onnx` | 5.7 МБ | MIT |
+| 3D-Speaker ERes2Net | `diar/3dspeaker_eres2net.onnx` | 38 МБ | Apache-2.0 |
 
+Модели не хранятся в git — их скачивает `scripts/fetch_models.sh`.
+В собранном APK они лежат в assets и распаковываются при первом запуске в `filesDir/models`.
+
+**Локальная LLM** подключается опционально: положите модель ONNX Runtime GenAI
+(`genai_config.json` + `*.onnx` + `*.onnx.data`) в `assets/models/llm/phi3-mini/`.
+Без неё работает детерминированный пунктуатор — пайплайн не падает.
+
+## Почему sherpa-onnx, а не whisper.cpp
+
+| | sherpa-onnx (выбрано) | whisper.cpp |
+|---|---|---|
+| Готовый AAR для Android | ✅ | ❌ нужна своя сборка NDK + исходники в репозитории |
+| Диаризация из коробки | ✅ pyannote + эмбеддинги + кластеризация | ❌ писать самому |
+| Tаймкоды по токенам | ✅ | ✅ |
+| Время до рабочего APK | часы | дни |
+
+Отдельная JNI-обвязка над whisper.cpp осталась в `docs/legacy-android-stub/` как запасной путь,
+если sherpa-onnx на конкретном устройстве покажет плохой WER.
+
+## Ограничения
+
+1. Только `arm64-v8a` — эмулятор x86 не подойдёт, нужен реальный телефон.
+2. Whisper `base` — компромисс. Для точности важнее `small`, но RTF вырастет втрое.
+3. Диаризация чувствительна к числу говорящих: авторежим ошибается на 4+; если известно — указывайте вручную.
+4. Модель 3D-Speaker обучена на китайском/английском; на русской речи работает, но уступает pyannote 3.1 на ПК.
+5. Первый запуск распаковывает ~200 МБ из assets — 10–30 секунд.
+6. Длинные записи (> 30 мин) держат PCM в памяти: на 4 ГБ RAM это ~1 ГБ на час аудио.
+
+## Тесты
+
+```bash
+./gradlew testDebugUnitTest
 ```
-android/
-  settings.gradle.kts          корневые настройки Gradle
-  build.gradle.kts             версии плагинов
-  gradle.properties
-  app/
-    build.gradle.kts           модуль приложения, NDK + CMake
-    src/main/
-      AndroidManifest.xml
-      java/ru/mifi/neurosteng/
-        MainActivity.kt        выбор файла, запуск, показ расшифровки
-        TranscriptAdapter.kt   список «спикер + время + текст»
-        WhisperBridge.kt       JNI-мост к whisper.cpp
-        HexJson.kt             формат вывода по ТЗ
-      cpp/
-        CMakeLists.txt
-        whisper_jni.cpp        JNI-функции, вызов whisper_full
-      res/layout/activity_main.xml
-      res/values/strings.xml
-  README.md                    этот файл
-```
 
-## Что нужно сделать перед сборкой
-
-1. Положить `whisper.cpp` в `app/src/main/cpp/whisper.cpp`
-   (`git clone https://github.com/ggerganov/whisper.cpp`).
-2. Скачать модель `ggml-base.bin` (~150 МБ) в `app/src/main/assets/models/`.
-3. Установить Android Studio (JDK 17+, NDK 26+, CMake 3.22+).
-4. `./gradlew assembleRelease`.
-
-## Формат вывода
-
-Совпадает с ТЗ и с `output.py` из корня репозитория:
-
-```json
-{"transcript":[{"speaker_id":"speaker_1","start_ms":0,"end_ms":4200,"text":"..."}]}
-```
-
-## Диаризация на устройстве
-
-В каркасе не реализована. Для неё нужен ONNX-вариант эмбеддингов
-(ECAPA в ONNX + кластеризация на Kotlin), либо упрощённое разделение
-по паузам. Честно: это следующий этап, а не готовая функция.
+Покрыто: выбор спикера по пересечению, разрезание сегмента на двух говорящих,
+нумерация спикеров, склейка соседних реплик, валидатор JSON, отбрасывание пустых сегментов.
+Найденный тестами баг (склейка текста разных сегментов ASR) исправлен в `Merge.build`.
