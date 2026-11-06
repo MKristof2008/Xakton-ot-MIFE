@@ -1,7 +1,35 @@
-"""Сборка PDF-отчёта о составе и ролях проекта (русская кириллица через Arial)."""
+"""Сборка PDF-отчёта о составе и ролях проекта (кириллица через TTF-шрифт).
+
+Шрифт ищется в нескольких местах: Windows-шрифты Arial, затем DejaVu или
+Liberation, которые есть почти в любом Linux. Раньше путь был жёстко
+прописан как C:\\Windows\\Fonts, и на Linux скрипт падал.
+"""
+import os
+import sys
+from pathlib import Path
+
 from fpdf import FPDF
 
-FONT_DIR = r"C:\Windows\Fonts"
+# Пары (обычный, жирный) в порядке предпочтения
+FONT_CANDIDATES = [
+    (r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf"),
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+    ("/Library/Fonts/Arial.ttf", "/Library/Fonts/Arial Bold.ttf"),
+]
+
+
+def find_fonts() -> tuple[str, str]:
+    """Первая доступная пара шрифтов с поддержкой кириллицы."""
+    for regular, bold in FONT_CANDIDATES:
+        if os.path.exists(regular) and os.path.exists(bold):
+            return regular, bold
+    raise RuntimeError(
+        "Не найден TTF-шрифт с кириллицей. Поставьте fonts-dejavu-core "
+        "(Linux) или проверьте C:\\Windows\\Fonts (Windows)."
+    )
 
 SECTIONS = [
     ("Состав команды и роли", [
@@ -46,20 +74,21 @@ SECTIONS = [
 
 
 def main() -> None:
+    regular, bold = find_fonts()
     pdf = FPDF()
-    pdf.add_font("arial", "", f"{FONT_DIR}\\arial.ttf")
-    pdf.add_font("arial", "B", f"{FONT_DIR}\\arialbd.ttf")
+    pdf.add_font("main", "", regular)
+    pdf.add_font("main", "B", bold)
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    pdf.set_font("arial", "B", 16)
+    pdf.set_font("main", "B", 16)
     pdf.cell(0, 12, "Xakton-ot-MIFE — состав команды и роли", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     for title, lines in SECTIONS:
-        pdf.set_font("arial", "B", 13)
+        pdf.set_font("main", "B", 13)
         pdf.cell(0, 9, title, new_x="LMARGIN", new_y="NEXT")
-        pdf.set_font("arial", "", 11)
+        pdf.set_font("main", "", 11)
         for line in lines:
             if line:
                 pdf.multi_cell(pdf.epw, 6, line)

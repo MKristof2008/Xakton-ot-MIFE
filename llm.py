@@ -52,6 +52,23 @@ COMMON_FIXES = {
     "вообщем": "в общем",
 }
 
+# Заикание ASR: «в в этом», «ну ну». Схлопываем ТОЛЬКО эти служебные слова.
+# Общее правило «любой повтор -> одно слово» портило смысл: «долго долго
+# обсуждали» и «давно давно» — нормальная русская речь, её сокращать нельзя.
+FILLER_WORDS = {
+    "в", "и", "а", "но", "на", "не", "ну", "да", "нет", "то", "же",
+    "вот", "это", "как", "что", "мы", "я", "он", "она", "так",
+}
+
+
+def collapse_stutter(text: str) -> str:
+    """Убирает повторы служебных слов, не трогая смысловые повторы."""
+    def repl(match: re.Match) -> str:
+        word = match.group(1)
+        return word if word.lower() in FILLER_WORDS else match.group(0)
+
+    return re.sub(r"\b(\w+)(?:\s+\1\b)+", repl, text, flags=re.IGNORECASE)
+
 
 def _norm_words(text: str) -> list[str]:
     return re.sub(r"[^\w\s]", " ", text.lower(), flags=re.UNICODE).split()
@@ -80,8 +97,8 @@ def clean_rules(text: str) -> str:
 
     cleaned = re.sub(r"\s+", " ", text).strip()
 
-    # «в в этом» -> «в этом»: подряд идущие одинаковые слова
-    cleaned = re.sub(r"\b(\w+)(\s+\1\b)+", r"\1", cleaned, flags=re.IGNORECASE)
+    # «в в этом» -> «в этом»: только служебные слова, смысловые повторы не трогаем
+    cleaned = collapse_stutter(cleaned)
 
     for wrong, right in COMMON_FIXES.items():
         cleaned = re.sub(rf"\b{wrong}\b", right, cleaned, flags=re.IGNORECASE)

@@ -54,6 +54,15 @@ def test_is_audio():
     assert not audio_utils.is_audio("c.txt")
 
 
+def _has_ffmpeg() -> bool:
+    try:
+        audio_utils.ffmpeg_exe()
+        return True
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _has_ffmpeg(), reason="нужен ffmpeg (в CI ставится отдельно)")
 def test_wav_roundtrip(tmp_path):
     audio = tone(440, 0.5)
     path = tmp_path / "x.wav"
@@ -61,6 +70,20 @@ def test_wav_roundtrip(tmp_path):
     decoded = audio_utils.decode_audio(path)
     assert len(decoded) == pytest.approx(len(audio), abs=2000)
     assert np.max(np.abs(decoded)) < 1.0
+
+
+def test_wav_written_without_ffmpeg(tmp_path):
+    """Запись WAV работает на чистом stdlib — не зависит от ffmpeg."""
+    import wave
+
+    audio = tone(440, 0.25)
+    path = tmp_path / "y.wav"
+    audio_utils.write_wav(path, audio)
+    with wave.open(str(path), "rb") as f:
+        assert f.getframerate() == audio_utils.SAMPLE_RATE
+        assert f.getnchannels() == 1
+        assert f.getsampwidth() == 2
+        assert f.getnframes() == len(audio)
 
 
 # ---------- VAD ----------

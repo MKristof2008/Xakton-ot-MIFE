@@ -22,8 +22,13 @@ jobs:
       - name: Установка зависимостей
         run: |
           python -m pip install --upgrade pip
-          # Только лёгкие пакеты: тесты не требуют torch и моделей
+          # Только лёгкие пакеты: тесты не требуют torch и моделей.
+          # numpy обязателен — audio_utils/diarize/embeddings импортируют его
+          # на уровне модуля, и без него падает сбор тестов.
           pip install pytest numpy requests python-dotenv
+          # ffmpeg нужен тестам декодирования и конвертации в mp3.
+          # imageio-ffmpeg даёт бинарник без прав суперпользователя.
+          pip install imageio-ffmpeg faster-whisper
 
       - name: Синтаксис всех модулей
         run: |

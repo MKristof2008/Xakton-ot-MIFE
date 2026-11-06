@@ -184,6 +184,17 @@ def main() -> int:
     ap.add_argument("--work", default=".testdata_work", help="каталог для сырых фрагментов")
     args = ap.parse_args()
 
+    # Синтез идёт через SAPI и существует только в Windows. Без этой проверки
+    # на Linux падало бы с невнятным FileNotFoundError на 'powershell'.
+    if sys.platform != "win32":
+        print(
+            "Генерация набора требует Windows: русские голоса берутся из SAPI.\n"
+            "Готовые WAV лежат в testdata/ (в git не входят, но создаются один раз).\n"
+            "Альтернатива: подставьте свои записи и <имя>.truth.json.",
+            file=sys.stderr,
+        )
+        return 2
+
     out_dir = Path(args.out)
     work = Path(args.work)
     out_dir.mkdir(parents=True, exist_ok=True)

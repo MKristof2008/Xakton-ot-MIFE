@@ -43,7 +43,7 @@ py run_local.py meeting.mp3 --model base --language ru -o result.json
 ```bash
 py make_testdata.py            # сгенерировать контрольный набор (Windows, SAPI)
 py evaluate_diarization.py     # DER по контрольному набору
-py -m pytest tests -q          # 54 теста без моделей и сети
+py -m pytest tests -q          # 75 тестов без моделей и сети
 ```
 
 ---
@@ -208,6 +208,42 @@ py app.py ask <txt> "вопрос"      # вопрос по записи
 py app.py speakers <txt>          # реальные имена спикеров
 py app.py tasks <txt>             # кейсы/задачи из документа
 ```
+
+---
+
+## Как подключить к своему проекту
+
+Три модуля ТЗ работают как обычная библиотека — интерфейсы плоские, вход и
+выход в формате ТЗ (словари с `start_ms/end_ms/text/speaker_id`):
+
+```python
+import sys
+sys.path.insert(0, "/путь/к/Xakton-ot-MIFE")
+
+import diarization, llm, output
+
+segments = [{"start_ms": 0, "end_ms": 4000, "text": "добрый день коллеги"}]
+
+segments = llm.clean_segments(segments, backend="rules")        # текст
+segments = diarization.diarize("meeting.mp3", segments)         # speaker_id
+result   = output.build_result(segments, duration_ms=10_000)    # HEX-JSON
+output.save_result(result, "result.json", duration_ms=10_000)   # с валидацией
+```
+
+Проверено прогоном из стороннего каталога: `diarize` возвращает те же ключи,
+что пришли, плюс `speaker_id`; `build_result` выдаёт результат, который
+`validate_hex` принимает. Внешних зависимостей для этого минимума —
+только `numpy` (`diarization` без torch откатывается на `mfcc`).
+
+Требования к окружению:
+
+| Модуль | Зависимости |
+|---|---|
+| `output`, `metrics`, `prompts` | только стандартная библиотека |
+| `llm` (режим `rules`) | только стандартная библиотека |
+| `llm` (режим `llama`) | `llama-cpp-python` + файл GGUF |
+| `asr`, `diarize`, `embeddings` | `numpy`, `faster-whisper`, `imageio-ffmpeg` |
+| `diarization` (speechbrain) | плюс `torch`, `speechbrain` |
 
 ---
 

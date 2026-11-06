@@ -89,12 +89,21 @@ def build_result(segments: list[dict], duration_ms: int | None = None,
 
     duration_ms — длительность аудио; если задана, сегменты за её пределами
     отбрасываются как галлюцинации (drop_out_of_bounds=True).
+
+    Отбрасывание всегда убирает и отрицательные start_ms: иначе build_result
+    выдавал результат, который тут же отвергал validate_hex, и save_result
+    падал на собственном выводе.
     """
+    segments = [
+        s for s in segments
+        if isinstance(s.get("start_ms"), int) and isinstance(s.get("end_ms"), int)
+        and s["start_ms"] >= 0 and s["end_ms"] > s["start_ms"]
+    ]
     if duration_ms is not None and drop_out_of_bounds:
         segments = [
             s for s in segments
-            if s.get("end_ms", 0) > 0 and s.get("start_ms", 0) < duration_ms
-            and s.get("end_ms", 0) <= duration_ms + END_TOLERANCE_MS
+            if s["start_ms"] < duration_ms
+            and s["end_ms"] <= duration_ms + END_TOLERANCE_MS
         ]
     segments = normalize_speakers(segments)
     segments = merge_adjacent(segments)
