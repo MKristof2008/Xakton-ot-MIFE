@@ -46,6 +46,10 @@ def main() -> None:
     s = sub.add_parser("speakers", help="Определить реальные имена спикеров")
     s.add_argument("source", help=".txt с транскриптом")
 
+    t = sub.add_parser("tasks", help="Извлечь кейсы/задачи из документа")
+    t.add_argument("source", help=".txt с текстом документа")
+    t.add_argument("-o", "--out", help="Куда сохранить JSON (по умолчанию stdout)")
+
     args = ap.parse_args()
 
     if args.cmd == "minutes":
@@ -61,6 +65,9 @@ def main() -> None:
     elif args.cmd == "speakers":
         transcript = Path(args.source).read_text(encoding="utf-8")
         result = json.dumps(pipeline.detect_speakers(transcript), ensure_ascii=False, indent=2)
+    elif args.cmd == "tasks":
+        text = Path(args.source).read_text(encoding="utf-8")
+        result = json.dumps(pipeline.extract_tasks(text), ensure_ascii=False, indent=2)
     else:
         transcript = Path(args.source).read_text(encoding="utf-8")
         result = pipeline.ask(args.question, [transcript])

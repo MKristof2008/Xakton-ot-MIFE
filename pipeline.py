@@ -18,6 +18,57 @@ from client import API_KEY, BASE_URL, chat
 # Порог длины транскрипта (символов), после которого включается map-reduce
 CHUNK_SIZE = 12_000
 
+# ---------- Извлечение задач из кейсов/документов (хакатон МИФИ) ----------
+TASKS_SCHEMA = {
+    "cases": [
+        {
+            "case": "название кейса/задачи",
+            "source": "источник (компания/документ)",
+            "goal": "что нужно сделать",
+            "requirements": ["требование или ограничение"],
+            "data": "какие данные/инструменты нужны или null",
+            "skills": ["Python", "SQL"],
+            "difficulty": "easy | medium | hard | null",
+        }
+    ]
+}
+
+TASKS_PROMPT = (
+    prompts.BASE_RULES
+    + "\n\nЗадача: извлеки из текста кейсы и практические задачи (для хакатона, "
+    "стажировки или внедрения). Для каждого кейса укажи цель, требования, "
+    "нужные данные и навыки. Не выдумывай: если чего-то нет в тексте — null "
+    "или пустой список.\n"
+    "Верни СТРОГО валидный JSON без markdown и пояснений по схеме:\n"
+    + json.dumps(TASKS_SCHEMA, ensure_ascii=False, indent=2)
+)
+
+TASKS_MERGE_PROMPT = (
+    prompts.BASE_RULES
+    + "\n\nНиже JSON-списки кейсов, извлечённые из нескольких документов. "
+    "Объедини в один список: убери дубли, сгруппируй похожие кейсы, "
+    "сохрани источники. Верни СТРОГО валидный JSON по схеме:\n"
+    + json.dumps(TASKS_SCHEMA, ensure_ascii=False, indent=2)
+)
+
+
+def extract_tasks(text: str) -> dict:
+    """Текст документа -> список кейсов/задач (dict). Длинные тексты — map-reduce."""
+    if len(text) <= CHUNK_SIZE:
+        raw = chat(prompts.build_messages(TASKS_PROMPT, text))
+    else:
+        partials = [
+            chat(prompts.build_messages(TASKS_PROMPT, chunk))
+            for chunk in _chunks(text)
+        ]
+        raw = chat(
+            prompts.build_messages(
+                TASKS_MERGE_PROMPT,
+                "Фрагменты (JSON по порядку):\n" + "\n---\n".join(partials),
+            )
+        )
+    return json.loads(_strip_markdown(raw))
+
 
 def transcribe_audio(audio_path: str, model: str | None = None) -> str:
     """Аудиофайл -> текст через /audio/transcriptions (Whisper-совместимый API)."""
