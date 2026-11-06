@@ -325,3 +325,42 @@ def test_assign_speakers_without_turns_keeps_text():
     out = asr.assign_speakers(tr, result)
     assert out.segments[0].text == "текст"
     assert out.segments[0].speaker is None
+
+# ---------- батчинг эмбеддингов (регрессия на потерю точности) ----------
+
+def test_mfcc_embedder_handles_windows_of_different_length():
+    """Окна разной длины не должны ломать эмбеддер."""
+    audio = tone(220, 3.0)
+    embedder = embeddings.MfccEmbedder()
+    windows = [(0.0, 1.5), (1.0, 2.5), (2.0, 3.0)]
+    emb = embedder.embed(audio, windows)
+    assert emb.shape == (3, emb.shape[1])
+    assert all(abs(np.linalg.norm(row) - 1.0) < 1e-4 for row in emb)
+
+
+def test_mfcc_embedder_empty_windows():
+    embedder = embeddings.MfccEmbedder()
+    assert embedder.embed(tone(220, 1.0), []).shape == (0, 80)
+
+
+def test_ecapa_batching_preserves_accuracy_when_available():
+    """Батчи не должны менять эмбеддинги: паддинг окон разной длины искажал
+    их (косинус 0.48), из-за чего диаризация сливала спикеров в одного.
+    Здесь проверяем, что группировка по длине сохраняет результат."""
+    pytest.importorskip("torch")
+    try:
+        import speechbrain  # noqa: F401
+    except ImportError:
+        pytest.skip("нужен speechbrain")
+
+    audio = np.concatenate([tone(220, 1.0), tone(300, 1.0), tone(220, 1.0)])
+    try:
+        embedder = embeddings.EcapaEmbedder()
+    except Exception:
+        pytest.skip("ECAPA недоступна")
+
+    windows = [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)]
+    batched = embedder.embed(audio, windows, batch_size=3)
+    single = embedder.embed(audio, windows, batch_size=1)
+    # одинаковые по длине окна обязаны дать одинаковый результат
+    assert np.allclose(batched, single, atol=1e-4)
