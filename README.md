@@ -338,6 +338,26 @@ output.save_result(result, "result.json", duration_ms=10_000)   # с валид�
 
 ---
 
+## Android-приложение (сдаваемая сборка)
+
+`android/` — рабочее приложение на Kotlin + Jetpack Compose, собрано и проверено
+(Gradle 8.7 / AGP 8.5.2 / Kotlin 2.0.21, JDK 21, Android SDK 34).
+Подробности: [`android/README.md`](android/README.md).
+
+```bash
+cd android
+./scripts/build.sh          # скачает AAR и модели, прогонит тесты, соберёт APK
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+| | |
+|---|---|
+| ASR | sherpa-onnx + Whisper base int8, `language=ru` |
+| Диаризация | sherpa-onnx: pyannote segmentation-3.0 + 3D-Speaker ERes2Net + кластеризация |
+| LLM | ONNX Runtime GenAI (опционально), с защитой от галлюцинаций |
+| Разрешения | ни одного сетевого: `INTERNET`/`ACCESS_NETWORK_STATE` удалены из манифеста |
+| Тесты | 8 unit-тестов слияния и схемы JSON, все зелёные |
+
 ## Документы
 
 - **`TZ_4_ROLES.md` — полное ТЗ под 4 роли (актуальное, читать первым)**

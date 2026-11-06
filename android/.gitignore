@@ -7,3 +7,10 @@ local.properties
 *.iml
 .idea/
 .cxx/
+
+# Модели ASR/диаризации (~200 МБ) не в git — скачиваются скриптом
+app/src/main/assets/models/asr/
+app/src/main/assets/models/diar/
+app/src/main/assets/models/llm/
+# Нативные библиотеки-артефакты (пересобираются из скрипта)
+app/libs/*.aar
