@@ -1,0 +1,8 @@
+speaker_1 0 7500
+speaker_2 7900 17900
+speaker_1 18300 26675
+speaker_2 27075 43200
+speaker_1 43600 51100
+speaker_2 51500 61500
+speaker_1 61900 70775
+speaker_2 71175 79425
