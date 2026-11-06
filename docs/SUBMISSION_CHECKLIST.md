@@ -4,7 +4,7 @@
 
 | # | Артефакт | Статус |
 |---|---|---|
-| 1 | Release APK, устанавливается и работает в режиме полёта | TODO — сборка не выполнена (на машине нет JDK/Android SDK) |
+| 1 | Release APK, устанавливается и работает в режиме полёта | Собран: `app-release-unsigned.apk` (10 МБ); проверка на устройстве и подпись — TODO |
 | 2 | Исходный код в репозитории | Готово: ветки `feat/integration` (ML-ядро) и `feature/frontend` (UI/экспорт), PR объединяет |
 | 3 | Инструкция по установке и использованию | Готово: docs/USER_GUIDE.md |
 | 4 | Описание архитектуры и применяемых моделей | Готово: docs/ARCHITECTURE.md + docs/ML_MODELS.md (цифры — измеренные) |
@@ -15,11 +15,12 @@
 
 ## Технические проверки перед сдачей
 
-- [ ] В merged manifest release-сборки **нет** `android.permission.INTERNET`
-      (`app/build/outputs/apk/release/...` → merged manifest / APK Analyzer). Исходный
-      манифест INTERNET не содержит, но нужна проверка после мержа всех зависимостей.
-- [ ] В release-коде нет сетевых библиотек и аналитики/краш-SDK (проверить dependency tree).
-- [ ] Заглушки движков (`Stubs`) не входят в release-сборку (проверить APK Analyzer).
+- [x] В merged manifest release-сборки **нет** `android.permission.INTERNET`
+      (проверено `aapt2 dump permissions` на `app-release-unsigned.apk`: только
+      RECORD_AUDIO, FOREGROUND_SERVICE, FOREGROUND_SERVICE_DATA_SYNC, POST_NOTIFICATIONS).
+- [x] В release-коде нет сетевых библиотек и аналитики/краш-SDK (проверено содержимое
+      APK: okhttp/retrofit/ktor/volley/firebase отсутствуют).
+- [x] Заглушки движков (`Stubs`) не входят в release-сборку (в APK классов `*Stub*` нет).
 - [ ] Экспортный JSON проходит автопроверку ТЗ: схема, порядок по `start_ms`,
       `end_ms >= start_ms`, целые числа, UTF-8 без escape-кириллицы, лишних полей нет
       (покрыто unit-тестом `ExportTest`).
