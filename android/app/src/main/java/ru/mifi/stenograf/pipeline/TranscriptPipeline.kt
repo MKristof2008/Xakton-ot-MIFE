@@ -2,10 +2,12 @@ package ru.mifi.stenograf.pipeline
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import ru.mifi.stenograf.asr.AsrEngine
 import ru.mifi.stenograf.audio.AudioDecoder
 import ru.mifi.stenograf.diar.Diarizer
 import ru.mifi.stenograf.llm.LlmPost
+import ru.mifi.stenograf.output.AsrSegment
 import ru.mifi.stenograf.output.Merge
 import ru.mifi.stenograf.output.Replica
 import ru.mifi.stenograf.output.SpeakerTurn
@@ -13,8 +15,8 @@ import ru.mifi.stenograf.output.SpeakerTurn
 /** Этапы обработки — для экрана прогресса. */
 enum class Stage(val label: String) {
     DECODE("Декодирование аудио"),
-    ASR("Распознавание речи"),
     DIAR("Определение говорящих"),
+    ASR("Распознавание речи"),
     MERGE("Сборка реплик"),
     LLM("Обработка текста"),
     DONE("Готово"),
@@ -40,17 +42,36 @@ data class TranscriptResult(
 
 /**
  * Сквозной офлайн-пайплайн: аудио → реплики.
- * Ни одного сетевого вызова: только MediaCodec, sherpa-onnx и (опционально) локальная LLM.
+ *
+ * Порядок принципиален: СНАЧАЛА диаризация, ПОТОМ распознавание по каждой реплике.
+ *
+ * Почему не наоборот. Whisper отдаёт длинные сегменты (20–30 с), которые накрывают
+ * несколько смен говорящего. Если распознать всё аудио целиком и потом приписать
+ * текст спикерам, строку приходится делить между людьми — по времени или поровну
+ * по словам. И то и другое перемешивает речь: слова одного человека уезжают
+ * другому. Распознавание внутри границ реплики такой проблемы не имеет по
+ * построению: каждое слово физически принадлежит одному говорящему.
+ *
+ * Ни одного сетевого вызова: только MediaCodec, sherpa-onnx и локальная LLM.
  */
 class TranscriptPipeline(private val context: Context) {
 
-    // Веса этапов для общего прогресса: диаризация самая долгая.
+    companion object {
+        private const val TAG = "Stenograf"
+
+        /** Длинные реплики режем на куски такой длины (мс): Whisper работает окнами. */
+        private const val MAX_UTTERANCE_MS = 25_000
+
+        /** Пауза внутри речи одного человека, до которой куски склеиваются (мс). */
+        private const val JOIN_GAP_MS = 700
+    }
+
     private val weights = mapOf(
-        Stage.DECODE to 0.05f,
-        Stage.ASR to 0.45f,
-        Stage.DIAR to 0.40f,
+        Stage.DECODE to 0.04f,
+        Stage.DIAR to 0.42f,
+        Stage.ASR to 0.46f,
         Stage.MERGE to 0.03f,
-        Stage.LLM to 0.07f,
+        Stage.LLM to 0.05f,
     )
 
     fun run(
@@ -64,7 +85,9 @@ class TranscriptPipeline(private val context: Context) {
         var done = 0f
 
         fun report(stage: Stage, frac: Float, msg: String = "") {
-            val overall = done + weights.getValue(stage) * frac.coerceIn(0f, 1f)
+            // Stage.DONE не имеет веса: это финальный маркер, а не этап с работой.
+            val overall = if (stage == Stage.DONE) 1f
+            else done + (weights[stage] ?: 0f) * frac.coerceIn(0f, 1f)
             onProgress(PipelineProgress(stage, frac, overall, msg))
         }
 
@@ -75,20 +98,11 @@ class TranscriptPipeline(private val context: Context) {
         var t = System.currentTimeMillis()
         val pcm = AudioDecoder.decode(context, uri)
         stagesMs[Stage.DECODE] = System.currentTimeMillis() - t
-        done += weights.getValue(Stage.DECODE)
+        done += (weights[Stage.DECODE] ?: 0f)
         checkCancel()
 
-        // 2. ASR
-        report(Stage.ASR, 0f, "Распознаём речь (${pcm.durationMs / 1000} с аудио)")
-        t = System.currentTimeMillis()
-        val asr = AsrEngine(context).use { engine ->
-            engine.transcribe(pcm.samples) { f -> report(Stage.ASR, f, "Распознаём речь") }
-        }
-        stagesMs[Stage.ASR] = System.currentTimeMillis() - t
-        done += weights.getValue(Stage.ASR)
-        checkCancel()
-
-        // 3. Диаризация
+        // 2. Диаризация — кто и когда говорит
+        Log.i(TAG, "stage DIAR start: ${pcm.samples.size} samples, ${pcm.durationMs} ms")
         report(Stage.DIAR, 0f, "Определяем говорящих")
         t = System.currentTimeMillis()
         val turns: List<SpeakerTurn> = runCatching {
@@ -96,31 +110,79 @@ class TranscriptPipeline(private val context: Context) {
                 report(Stage.DIAR, f, "Определяем говорящих")
             }
         }.getOrElse { e ->
-            // Диаризация не должна убивать весь результат: отдаём одного спикера.
-            onProgress(PipelineProgress(Stage.DIAR, 1f, done + weights.getValue(Stage.DIAR),
-                "Диаризация недоступна: ${e.message ?: "ошибка"}"))
-            listOf(SpeakerTurn(0, (pcm.samples.size * 1000L / 16_000).toInt(), "raw_0"))
+            // Диаризация не должна убивать результат: отдаём одного говорящего.
+            Log.w(TAG, "diarization failed, falling back to single speaker", e)
+            onProgress(
+                PipelineProgress(
+                    Stage.DIAR, 1f, done + (weights[Stage.DIAR] ?: 0f),
+                    "Диаризация недоступна: ${e.message ?: "ошибка"}",
+                ),
+            )
+            listOf(SpeakerTurn(0, pcm.durationMs.toInt(), "raw_0"))
         }
         stagesMs[Stage.DIAR] = System.currentTimeMillis() - t
-        done += weights.getValue(Stage.DIAR)
+        Log.i(TAG, "stage DIAR done: ${turns.size} turns in ${stagesMs[Stage.DIAR]} ms")
+        done += (weights[Stage.DIAR] ?: 0f)
         checkCancel()
 
-        // 4. Слияние
+        // 3. Склейка turn-ов в реплики: подряд идущие куски одного спикера с
+        //    короткой паузой — одна реплика, распознавать её надо целиком.
+        val utterances = Merge.groupTurns(turns, JOIN_GAP_MS, MAX_UTTERANCE_MS)
+        Log.i(TAG, "grouped ${turns.size} turns into ${utterances.size} utterances")
+
+        // 4. Распознавание речи по каждой реплике отдельно
+        report(Stage.ASR, 0f, "Распознаём речь (${utterances.size} реплик)")
+        t = System.currentTimeMillis()
+        val recognized = mutableListOf<Pair<SpeakerTurn, List<AsrSegment>>>()
+        val engine = AsrEngine(context)
+        try {
+            var processedMs = 0L
+            val totalMs = utterances.sumOf { (it.endMs - it.startMs).toLong() }.coerceAtLeast(1)
+            for ((idx, u) in utterances.withIndex()) {
+                checkCancel()
+                val slice = slicePcm(pcm.samples, u.startMs, u.endMs)
+                // Слишком короткие фрагменты (шум, вдох) не распознаём — на них
+                // модель только галлюцинирует.
+                if (slice.size < 4_000) continue
+                val segs = engine.transcribe(slice)
+                if (segs.isNotEmpty()) {
+                    val shifted = segs.map { s ->
+                        s.copy(startMs = s.startMs + u.startMs, endMs = s.endMs + u.startMs)
+                    }
+                    recognized += u to shifted
+                }
+                processedMs += (u.endMs - u.startMs)
+                report(
+                    Stage.ASR, processedMs.toFloat() / totalMs,
+                    "Распознаём речь: ${idx + 1} из ${utterances.size}",
+                )
+            }
+        } finally {
+            engine.close()
+        }
+        stagesMs[Stage.ASR] = System.currentTimeMillis() - t
+        Log.i(TAG, "stage ASR done: ${recognized.sumOf { it.second.size }} segments in ${stagesMs[Stage.ASR]} ms")
+        done += (weights[Stage.ASR] ?: 0f)
+        checkCancel()
+
+        // 5. Сборка реплик: текст уже привязан к говорящему, остаётся нормализовать.
         report(Stage.MERGE, 0.5f, "Собираем реплики")
         t = System.currentTimeMillis()
-        var replicas = Merge.build(asr, turns)
+        var replicas = Merge.buildFromRecognized(recognized)
         stagesMs[Stage.MERGE] = System.currentTimeMillis() - t
-        done += weights.getValue(Stage.MERGE)
+        Log.i(TAG, "stage MERGE done: ${replicas.size} replicas")
+        done += (weights[Stage.MERGE] ?: 0f)
         checkCancel()
 
-        // 5. Локальная LLM: пунктуация и регистр, без перефразирования
+        // 6. Локальная LLM: пунктуация и регистр, без перефразирования
         report(Stage.LLM, 0f, "Обрабатываем текст локальной моделью")
         t = System.currentTimeMillis()
         replicas = LlmPost(context).polish(replicas) { f ->
             report(Stage.LLM, f, "Обрабатываем текст локальной моделью")
         }
         stagesMs[Stage.LLM] = System.currentTimeMillis() - t
-        done += weights.getValue(Stage.LLM)
+        Log.i(TAG, "stage LLM done in ${stagesMs[Stage.LLM]} ms")
+        done += (weights[Stage.LLM] ?: 0f)
 
         report(Stage.DONE, 1f, "Готово")
 
@@ -132,12 +194,12 @@ class TranscriptPipeline(private val context: Context) {
             speakerCount = replicas.map { it.speakerId }.distinct().size,
         )
     }
-}
 
-/** use{} для AsrEngine: гарантированно освобождает нативную модель. */
-private inline fun <T> AsrEngine.use(block: (AsrEngine) -> T): T =
-    try {
-        block(this)
-    } finally {
-        close()
+    /** Вырезает отрезок PCM по миллисекундам с проверкой границ. */
+    private fun slicePcm(samples: FloatArray, startMs: Int, endMs: Int): FloatArray {
+        // 16 кГц = 16 сэмплов на миллисекунду.
+        val from = (startMs.toLong() * 16).toInt().coerceIn(0, samples.size)
+        val to = (endMs.toLong() * 16).toInt().coerceIn(from, samples.size)
+        return samples.copyOfRange(from, to)
     }
+}

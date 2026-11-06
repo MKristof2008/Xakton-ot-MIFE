@@ -80,6 +80,17 @@ class AppState(private val context: Context) : ViewModel() {
                     )
                 }
                 result = res
+                // Пишем результат на диск: нужно для замеров WER/DER с ПК и для
+                // отладки, когда экран не под рукой. Файл во внутреннем каталоге.
+                runCatching {
+                    val f = java.io.File(context.filesDir, "last_result.json")
+                    f.writeText(ru.mifi.stenograf.output.HexJson.toJson(res.replicas))
+                    java.io.File(context.filesDir, "last_meta.txt").writeText(
+                        "duration_ms=${res.durationMs}\nprocessing_ms=${res.processingMs}\n" +
+                            "rtf=${res.rtf}\nspeakers=${res.speakerCount}\nreplicas=${res.replicas.size}\n" +
+                            res.stagesMs.entries.joinToString("\n") { "${it.key}=${it.value}ms" },
+                    )
+                }
                 screen = Screen.RESULT
             } catch (e: Exception) {
                 error = e.message ?: e.toString()

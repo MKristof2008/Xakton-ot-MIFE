@@ -25,10 +25,20 @@ object AudioDecoder {
     fun decode(context: Context, uri: Uri): Pcm {
         val extractor = MediaExtractor()
         try {
-            context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
-                if (afd.declaredLength >= 0) extractor.setDataSource(afd.fileDescriptor, afd.startOffset, afd.declaredLength)
-                else extractor.setDataSource(afd.fileDescriptor)
-            } ?: error("Не удалось открыть файл: $uri")
+            // file:// приходит при отладочных прогонах и из некоторых файловых менеджеров;
+            // MediaExtractor читает такой путь напрямую, без ContentResolver.
+            if (uri.scheme == "file") {
+                val path = uri.path ?: error("Некорректный file-URI: $uri")
+                extractor.setDataSource(path)
+            } else {
+                context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+                    if (afd.declaredLength >= 0) {
+                        extractor.setDataSource(afd.fileDescriptor, afd.startOffset, afd.declaredLength)
+                    } else {
+                        extractor.setDataSource(afd.fileDescriptor)
+                    }
+                } ?: error("Не удалось открыть файл: $uri")
+            }
 
             val trackIndex = (0 until extractor.trackCount).firstOrNull { i ->
                 extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true

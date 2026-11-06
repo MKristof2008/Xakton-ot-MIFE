@@ -20,6 +20,72 @@ object Merge {
     private const val MIN_PIECE_MS = 150
 
     /**
+     * Склеивает соседние turn-ы одного говорящего в одну реплику.
+     *
+     * Зачем: диаризация режет речь на мелкие куски (по 1–3 с), а распознавать
+     * выгоднее целыми фразами — Whisper на обрывке теряет контекст и точность.
+     * Куски одного человека, разделённые паузой не больше [maxGapMs], — это
+     * одна реплика. Длинные реплики дробим, чтобы не выйти за окно модели.
+     */
+    fun groupTurns(
+        turns: List<SpeakerTurn>,
+        maxGapMs: Int = 700,
+        maxLenMs: Int = 25_000,
+    ): List<SpeakerTurn> {
+        if (turns.isEmpty()) return emptyList()
+        val sorted = turns.sortedBy { it.startMs }
+        val out = mutableListOf<SpeakerTurn>()
+        var cur = sorted.first()
+
+        for (t in sorted.drop(1)) {
+            val sameSpeaker = t.speakerRaw == cur.speakerRaw
+            val gap = t.startMs - cur.endMs
+            val mergedLen = t.endMs - cur.startMs
+            if (sameSpeaker && gap <= maxGapMs && mergedLen <= maxLenMs) {
+                cur = cur.copy(endMs = maxOf(cur.endMs, t.endMs))
+            } else {
+                out += cur
+                cur = t
+            }
+        }
+        out += cur
+
+        // Длинные реплики режем поровну: распознавание идёт окнами модели.
+        return out.flatMap { u ->
+            val len = u.endMs - u.startMs
+            if (len <= maxLenMs) listOf(u)
+            else {
+                val parts = (len + maxLenMs - 1) / maxLenMs
+                (0 until parts).map { i ->
+                    val s = u.startMs + len * i / parts
+                    val e = u.startMs + len * (i + 1) / parts
+                    SpeakerTurn(s, e, u.speakerRaw)
+                }
+            }
+        }.filter { it.endMs > it.startMs }
+    }
+
+    /**
+     * Сборка финальных реплик из уже распознанных по говорящим отрезков.
+     * Текст каждой пары получен из своей реплики, поэтому делить слова между
+     * спикерами не нужно — это и есть главное отличие от [build].
+     */
+    fun buildFromRecognized(
+        recognized: List<Pair<SpeakerTurn, List<AsrSegment>>>,
+    ): List<Replica> {
+        val items = mutableListOf<Pair<AsrSegment, String>>()
+        for ((turn, segments) in recognized.sortedBy { it.first.startMs }) {
+            for (seg in segments) {
+                val text = seg.text.trim()
+                if (text.isEmpty()) continue
+                items += AsrSegment(seg.startMs, seg.endMs, text) to turn.speakerRaw
+            }
+        }
+        val normalized = normalizeSpeakers(items)
+        return mergeAdjacent(normalized).filter { it.text.isNotBlank() && it.endMs > it.startMs }
+    }
+
+    /**
      * Сегмент ASR может накрывать двух говорящих — режем его по границам turn-ов.
      * Без этого точность меток падает: реплика приписывается одному человеку целиком.
      */

@@ -15,7 +15,10 @@ import java.io.File
  * Диаризация на устройстве: pyannote segmentation-3.0 + WeSpeaker/3D-Speaker embeddings
  * + агломеративная кластеризация (всё внутри sherpa-onnx, офлайн).
  */
-class Diarizer(context: Context) {
+class Diarizer(
+    context: Context,
+    private val threads: Int = Runtime.getRuntime().availableProcessors().coerceIn(2, 4),
+) {
 
     private val appContext = context.applicationContext
 
@@ -39,11 +42,11 @@ class Diarizer(context: Context) {
         val config = OfflineSpeakerDiarizationConfig(
             segmentation = OfflineSpeakerSegmentationModelConfig(
                 pyannote = OfflineSpeakerSegmentationPyannoteModelConfig(model = seg.absolutePath),
-                numThreads = 1,
+                numThreads = threads,
             ),
             embedding = SpeakerEmbeddingExtractorConfig(
                 model = emb.absolutePath,
-                numThreads = 1,
+                numThreads = threads,
             ),
             clustering = FastClusteringConfig(
                 numClusters = numSpeakers ?: -1,
@@ -55,13 +58,13 @@ class Diarizer(context: Context) {
 
         val sd = OfflineSpeakerDiarization(config = config)
         try {
-            // Лямбда передаётся явно: аргумент arg со значением по умолчанию идёт
-            // последним, поэтому trailing-lambda привязалась бы к нему.
-            val callback: (Int, Int, Long) -> Int = { done, total, _ ->
-                if (total > 0) onProgress(done.toFloat() / total.coerceAtLeast(1))
-                0 // 0 = продолжаем; ненулевое значение прервало бы обработку
-            }
-            val raw = sd.processWithCallback(samples, callback, 0L)
+            // processWithCallback НЕ используем: JNI-обвязка sherpa-onnx ищет в
+            // переданном объекте метод invoke(IIJ)Ljava/lang/Integer;, а Kotlin-лямбда
+            // компилируется в invoke(Object,Object,Object)Object -> NoSuchMethodError,
+            // JNI abort и аварийное завершение процесса. См. tombstone 2026-11-07.
+            onProgress(0.05f)
+            val raw = sd.process(samples)
+            onProgress(1f)
             return raw.map { s ->
                 SpeakerTurn(
                     startMs = (s.start * 1000).toInt(),

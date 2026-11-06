@@ -22,8 +22,20 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
     private var recognizer: OfflineRecognizer? = null
 
     companion object {
-        const val WINDOW_SEC = 20f
-        const val OVERLAP_SEC = 2f
+        /**
+         * Длина окна. Whisper обрабатывает окно целиком, поэтому слишком длинное
+         * окно замедляет инференс без выигрыша в точности.
+         */
+        const val WINDOW_SEC = 30f
+
+        /**
+         * Перекрытие окон. Раньше было 2 с, но это давало повтор фраз на границах
+         * и заметно портило WER (движок не может надёжно склеить два прогона:
+         * Whisper на разных окнах пишет одну и ту же фразу по-разному).
+         * Ноль — на стыке возможна потеря одного слова; этим и платим за отсутствие
+         * дублей. Слово-«перебежчик» видно в отчёте как одна вставка/удаление.
+         */
+        const val OVERLAP_SEC = 0f
 
         fun defaultThreads(): Int =
             Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
@@ -92,16 +104,21 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
                     for (seg in splitIntoSegments(result.tokens, ts, text)) {
                         val sMs = chunkStartMs + (seg.first * 1000).toInt()
                         val eMs = chunkStartMs + (seg.second * 1000).toInt()
-                        if (eMs > lastEmittedEndMs + 200) { // не дублируем перекрытие
-                            out += AsrSegment(sMs, eMs, seg.third)
+                        // Окна перекрываются, поэтому начало нового окна повторяет
+                        // хвост предыдущего. Отрезаем только совпавший префикс, а
+                        // остаток фразы сохраняем — терять новую речь нельзя.
+                        val fresh = trimRepeatedPrefix(seg.third, out)
+                        if (fresh.isNotBlank() && eMs > lastEmittedEndMs) {
+                            out += AsrSegment(maxOf(sMs, 0), eMs, fresh)
                             lastEmittedEndMs = maxOf(lastEmittedEndMs, eMs)
                         }
                     }
                 } else {
                     val sMs = chunkStartMs
                     val eMs = chunkStartMs + chunk.size * 1000 / 16_000
-                    if (eMs > lastEmittedEndMs + 200) {
-                        out += AsrSegment(sMs, eMs, text)
+                    val fresh = trimRepeatedPrefix(text, out)
+                    if (fresh.isNotBlank() && eMs > lastEmittedEndMs) {
+                        out += AsrSegment(sMs, eMs, fresh)
                         lastEmittedEndMs = eMs
                     }
                 }
@@ -146,6 +163,47 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
             listOf(Triple(ts.firstOrNull() ?: 0f, ts.lastOrNull() ?: 0f, fullText))
         }
     }
+
+    /**
+     * Отрезает от начала нового сегмента те слова, которыми уже закончился
+     * принятый текст: так уходит повтор из-за перекрытия окон, но новая речь
+     * в конце фразы сохраняется. Сравнение по нормализованным словам, потому что
+     * Whisper на границе окна пишет ту же фразу с другой пунктуацией.
+     */
+    private fun trimRepeatedPrefix(text: String, already: List<AsrSegment>): String {
+        if (already.isEmpty()) return text
+        // Перекрытие — 1–2 секунды речи, это самое большее два последних сегмента.
+        val oldWords = words(already.takeLast(2).joinToString(" ") { it.text })
+        if (oldWords.isEmpty()) return text
+
+        val raw = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val newNorm = raw.map { normalizeWord(it) }.filter { it.isNotEmpty() }
+        if (newNorm.isEmpty()) return text
+
+        val maxN = minOf(oldWords.size, newNorm.size)
+        var cutRaw = 0
+        for (n in maxN downTo 2) {
+            if (oldWords.subList(oldWords.size - n, oldWords.size) == newNorm.subList(0, n)) {
+                // Переводим «n нормализованных слов» в число исходных токенов.
+                var seen = 0
+                var i = 0
+                while (i < raw.size && seen < n) {
+                    if (normalizeWord(raw[i]).isNotEmpty()) seen++
+                    i++
+                }
+                cutRaw = i
+                break
+            }
+        }
+        if (cutRaw == 0) return text
+        return raw.drop(cutRaw).joinToString(" ")
+    }
+
+    private fun words(s: String): List<String> =
+        s.split(Regex("\\s+")).map { normalizeWord(it) }.filter { it.isNotEmpty() }
+
+    private fun normalizeWord(w: String): String =
+        w.lowercase().filter { it.isLetterOrDigit() }
 
     fun close() {
         recognizer?.release()

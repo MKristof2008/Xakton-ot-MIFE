@@ -1,0 +1,10 @@
+duration_ms=96413
+processing_ms=66890
+rtf=0.6937861
+speakers=2
+replicas=25
+DECODE=444ms
+DIAR=38180ms
+ASR=28257ms
+MERGE=1ms
+LLM=6ms

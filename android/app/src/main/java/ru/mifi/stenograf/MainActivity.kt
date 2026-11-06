@@ -2,6 +2,7 @@ package ru.mifi.stenograf
 
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -28,11 +29,17 @@ import ru.mifi.stenograf.ui.StenografTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Отладочный запуск из adb: не требует тапов по файловому менеджеру.
+        //   adb shell am start -n ru.mifi.stenograf/.MainActivity         //     -d content://media/external/audio/media/<id> --ei speakers 2 --ez autorun true
+        val debugUri = intent?.data
+        val autorun = intent?.getBooleanExtra("autorun", false) == true
+        val debugSpeakers = if (intent?.hasExtra("speakers") == true) intent.getIntExtra("speakers", 0) else null
+        if (debugUri != null && autorun) Log.i("Stenograf", "authorun: uri=$debugUri speakers=$debugSpeakers")
         setContent {
             StenografTheme {
                 Scaffold { padding ->
                     Box(Modifier.fillMaxSize().padding(padding)) {
-                        App()
+                        App(autorunUri = if (autorun) debugUri else null, autorunSpeakers = debugSpeakers)
                     }
                 }
             }
@@ -41,9 +48,17 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun App() {
+private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
     val context = LocalContext.current
     val state = remember { AppState(context) }
+
+    // Автозапуск обработки при отладочном intent — ускоряет прогоны с ПК.
+    if (autorunUri != null) {
+        remember {
+            state.start(autorunUri, autorunUri.lastPathSegment ?: "debug", autorunSpeakers)
+            true
+        }
+    }
 
     val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
