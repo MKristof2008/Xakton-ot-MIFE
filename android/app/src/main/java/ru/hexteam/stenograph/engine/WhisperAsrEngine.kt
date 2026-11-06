@@ -31,14 +31,12 @@ class WhisperAsrEngine(
                         "в assets или файл ggml-small.bin во внутреннее хранилище."
                 )
             }
-            val wav = AudioConverter.toWav16kMono(appContext, File(audioPath))
+            // keep = true: тот же WAV понадобится диаризации, второй раз
+            // декодировать не нужно (см. AudioPrep).
+            val wav = AudioPrep.prepare(appContext, File(audioPath), keep = true)
                 ?: throw IllegalStateException("Не удалось декодировать аудио в WAV 16 кГц")
-            try {
-                bridge.transcribe(wav.absolutePath, language).map { (start, end, text) ->
-                    AsrSegment(startMs = start, endMs = end, text = text)
-                }
-            } finally {
-                wav.delete()
+            bridge.transcribe(wav.absolutePath, language).map { (start, end, text) ->
+                AsrSegment(startMs = start, endMs = end, text = text)
             }
         }
 }

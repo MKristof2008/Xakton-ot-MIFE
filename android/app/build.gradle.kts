@@ -67,10 +67,24 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // sherpa-onnx: нативные библиотеки распаковываются при установке,
+        // иначе на части прошивок JNI не находит их из APK.
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    androidResources {
+        // Модели ONNX лежат в assets без сжатия: распаковка съедает память
+        // при первом чтении и заметно замедляет старт.
+        noCompress += listOf("onnx", "bin", "txt")
     }
 }
 
 dependencies {
+    // sherpa-onnx: диаризация (pyannote-3.0 + 3D-Speaker) и ASR на устройстве.
+    implementation(files("libs/sherpa-onnx.aar"))
+
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -87,4 +101,9 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+
+    // Замеры WER/DER/RTF на реальном устройстве (tools/bench). Не входят в APK.
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
