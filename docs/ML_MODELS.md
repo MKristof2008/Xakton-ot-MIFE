@@ -3,6 +3,47 @@
 Все цифры — реальные измерения на этом репозитории, если не указано иное.
 Устройство замеров на ПК: Windows, CPU (без GPU). Целевое устройство: Android (SM-S938B).
 
+## Архитектура ML-пайплайна (на устройстве)
+
+```
+аудио (любой формат)
+  → AudioConverter (MediaCodec) → WAV 16 кГц моно
+  → Whisper small (whisper.cpp, JNI, CPU arm64) → сегменты с таймкодами
+  → фильтр галлюцинаций (границы > конца записи, пустой текст)
+  → диаризация (sherpa-onnx, в разработке) → speaker_N
+  → сшивка реплик с говорящими
+  → локальная LLM (только пунктуация/регистр, флаг включения)
+  → Transcript JSON {"transcript":[{speaker_id,start_ms,end_ms,text}]}
+```
+
+Инференс полностью локальный: в манифесте нет разрешения INTERNET
+(проверено `aapt2 dump permissions`).
+
+## ASR на устройстве: реализация
+
+- Движок: **whisper.cpp** (master), собран из исходников в APK через
+  CMake/NDK (`android/app/src/main/cpp/`). faster-whisper не подошёл:
+  у ctranslate2 нет Android-сборок (проверено по PyPI).
+- Модель: **ggml-small.bin** (~465 МБ, ~244M параметров, лицензия MIT,
+  формат GGML). Кладётся в `filesDir/ggml-small.bin` (adb push при подготовке
+  к защите), fallback — `assets/models/`.
+- Код: `engine/WhisperBridge.kt` (JNI), `engine/WhisperAsrEngine.kt`,
+  `android/app/src/main/cpp/whisper_jni.cpp`.
+- Оптимизации (коммит 41295b4): `flash_attn = true`, автоподбор потоков
+  (`hardware_concurrency/2`, в пределах 4–8), замер RTF в logcat (тег WhisperJNI),
+  greedy-декодинг, `no_context = true` против зацикливания.
+
+## Графики измерений
+
+![WER моделей](img/wer_models.png)
+
+![A/B роль LLM](img/wer_llm_ab.png)
+
+![RTF](img/rtf.png)
+
+Графики строятся скриптом `tools/make_ml_charts.py` из цифр этого документа
+(ничего не выдумано: нет измерения — нет столбца).
+
 ## Тестовый набор
 
 `artifacts/test-audio/` — 20 записей русской речи (VoxForge, 16 кГц моно) + эталонные
