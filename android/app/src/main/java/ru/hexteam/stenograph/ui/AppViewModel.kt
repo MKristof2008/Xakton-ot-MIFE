@@ -19,6 +19,7 @@ import ru.hexteam.stenograph.core.PipelineStage
 import ru.hexteam.stenograph.core.TranscriptLine
 import ru.hexteam.stenograph.engine.Stubs
 import ru.hexteam.stenograph.export.Export
+import ru.hexteam.stenograph.service.TranscriptionService
 import java.io.File
 
 /**
@@ -115,6 +116,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         processJob?.cancel()
+        val app = getApplication<Application>()
         processJob = viewModelScope.launch {
             _state.update {
                 it.copy(
@@ -123,6 +125,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     error = null,
                 )
             }
+            TranscriptionService.start(app, PipelineStage.ASR.title)
             try {
                 val path = copyToCache(uri)
                 val result = withContext(Dispatchers.Default) {
@@ -130,7 +133,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         audioPath = path,
                         expectedSpeakers = _state.value.expectedSpeakers,
                         useLlm = _state.value.useLlm,
-                        onStage = { stage -> _state.update { it.copy(stage = stage) } },
+                        onStage = { stage ->
+                            _state.update { it.copy(stage = stage) }
+                            TranscriptionService.update(app, stage.title)
+                        },
                     )
                 }
                 _state.update {
@@ -160,6 +166,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         error = e.message ?: "Не удалось обработать запись",
                     )
                 }
+            } finally {
+                TranscriptionService.stop(app)
             }
         }
     }
@@ -168,6 +176,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun cancel() {
         processJob?.cancel()
         processJob = null
+        TranscriptionService.stop(getApplication())
         _state.update {
             it.copy(screen = Screen.IMPORT, stage = PipelineStage.IDLE)
         }
