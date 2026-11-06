@@ -101,7 +101,10 @@ def main() -> None:
     md_path.write_text(to_markdown(minutes), encoding="utf-8")
     print(f"      -> {json_path.name}")
     print(f"      -> {md_path.name}")
-    print("\nГотово.")
+
+    from client import Stats
+    print(f"\nСтатистика API: {Stats.summary()}")
+    print("Готово.")
 
 
 if __name__ == "__main__":
