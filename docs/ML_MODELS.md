@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|---|---|
 | Whisper tiny | faster-whisper int8 | ~75 МБ | **0.345** | ~0.25 | whisper.cpp / sherpa-onnx | MIT | Нет: WER плохой |
 | Whisper base | faster-whisper int8 | ~145 МБ | TODO | TODO | да | MIT | Запасной |
-| Whisper small | faster-whisper int8 | ~480 МБ | **0.161** | TODO | да (q5/q8) | MIT | **Выбран** |
+| Whisper small | faster-whisper int8 | ~480 МБ | **0.161** | **0.81** (5 записей) | да (q5/q8) | MIT | **Выбран** |
 | Whisper small | faster-whisper float16 | ~950 МБ | TODO | TODO | нет (тяжёлый) | MIT | Нет для телефона |
 | GigaAM v2 (RNNT/CTC) | onnx / sherpa-onnx | ~250–600 МБ | TODO | TODO | sherpa-onnx | проверить | Кандидат если small не влезет в RTF |
 | Zipformer RU (sherpa-onnx) | sherpa-onnx | ~200 МБ | TODO | TODO | да, быстрый | проверить | Кандидат по скорости |
