@@ -84,6 +84,12 @@ def ask(question: str, fragments: list[str]) -> str:
     return chat(prompts.build_qa_messages(question, fragments))
 
 
+def detect_speakers(transcript: str) -> dict[str, str | None]:
+    """Определить реальные имена спикеров: {'Спикер 1': 'Имя' | None, ...}."""
+    raw = chat(prompts.build_messages(prompts.SPEAKER_NAMES_PROMPT, transcript))
+    return json.loads(_strip_markdown(raw))
+
+
 def _strip_markdown(text: str) -> str:
     """Модель иногда оборачивает JSON в ```json ... ``` — снимаем обёртку."""
     t = text.strip()

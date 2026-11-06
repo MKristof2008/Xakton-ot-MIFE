@@ -43,6 +43,9 @@ def main() -> None:
     q.add_argument("source", help=".txt с транскриптом")
     q.add_argument("question", help="Вопрос по содержанию записи")
 
+    s = sub.add_parser("speakers", help="Определить реальные имена спикеров")
+    s.add_argument("source", help=".txt с транскриптом")
+
     args = ap.parse_args()
 
     if args.cmd == "minutes":
@@ -55,6 +58,9 @@ def main() -> None:
         result = json.dumps(minutes, ensure_ascii=False, indent=2)
     elif args.cmd == "clean":
         result = pipeline.clean_transcript(Path(args.source).read_text(encoding="utf-8"))
+    elif args.cmd == "speakers":
+        transcript = Path(args.source).read_text(encoding="utf-8")
+        result = json.dumps(pipeline.detect_speakers(transcript), ensure_ascii=False, indent=2)
     else:
         transcript = Path(args.source).read_text(encoding="utf-8")
         result = pipeline.ask(args.question, [transcript])
