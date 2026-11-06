@@ -42,8 +42,11 @@ bool is_hallucination(whisper_context *ctx, int i, int audioMs) {
 
 std::string segment_text(whisper_context *ctx, int i) {
     std::string out;
+    // Спецтокены (таймкоды, [_BEG_] и пр.) пропускаем: id >= eot — служебные.
+    const whisper_token eot = whisper_token_eot(ctx);
     const int n = whisper_full_n_tokens(ctx, i);
     for (int k = 0; k < n; ++k) {
+        if (whisper_full_get_token_id(ctx, i, k) >= eot) continue;
         const char *txt = whisper_full_get_token_text(ctx, i, k);
         if (txt) out += txt;
     }
@@ -174,6 +177,14 @@ Java_ru_hexteam_stenograph_engine_WhisperBridge_nativeTranscribe(
         const auto t1 = whisper_full_get_segment_t1(ctx, i) * 10;
         lines.push_back(std::to_string(t0) + "\t" + std::to_string(t1) + "\t" + text);
     }
+
+    // Полный текст расшифровки в logcat: после каждой записи текст можно
+    // забрать с телефона (adb logcat -s WhisperJNI) для разбора и улучшений.
+    LOGI("=== TRANSCRIPT BEGIN (%d мс аудио) ===", audioMs);
+    for (const auto &line : lines) {
+        LOGI("SEG\t%s", line.c_str());
+    }
+    LOGI("=== TRANSCRIPT END: %zu реплик ===", lines.size());
 
     jclass strClass = env->FindClass("java/lang/String");
     jobjectArray result = env->NewObjectArray(static_cast<jsize>(lines.size()), strClass, nullptr);
