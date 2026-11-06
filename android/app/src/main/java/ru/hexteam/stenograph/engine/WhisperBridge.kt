@@ -79,7 +79,7 @@ class WhisperBridge(private val context: Context) {
     private external fun nativeRelease(handle: Long)
 
     companion object {
-        const val DEFAULT_MODEL_ASSET = "models/ggml-base.bin"
+        const val DEFAULT_MODEL_ASSET = "models/ggml-tiny.bin"
 
         init {
             System.loadLibrary("whisper_jni")
