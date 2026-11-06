@@ -16,19 +16,22 @@ import java.io.File
 class WhisperAsrEngine(
     context: Context,
     private val language: String = "ru",
+    /** Модель в assets. Выбор по замеру WER, не по умолчанию библиотеки. */
+    private val modelAsset: String = WhisperBridge.DEFAULT_MODEL_ASSET,
 ) : AsrEngine {
 
     private val appContext = context.applicationContext
     private val bridge = WhisperBridge(appContext)
 
-    override fun isReady(): Boolean = runCatching { bridge.modelAvailable() }.getOrDefault(false)
+    override fun isReady(): Boolean =
+        runCatching { bridge.modelAvailable(modelAsset) }.getOrDefault(false)
 
     override suspend fun transcribe(audioPath: String): List<AsrSegment> =
         withContext(Dispatchers.Default) {
-            if (!bridge.load()) {
+            if (!bridge.load(modelAsset)) {
                 throw IllegalStateException(
-                    "Модель Whisper не найдена. Положите ${WhisperBridge.DEFAULT_MODEL_ASSET} " +
-                        "в assets или файл ggml-small.bin во внутреннее хранилище."
+                    "Модель Whisper не найдена. Положите $modelAsset " +
+                        "в assets или файл ggml-base.bin во внутреннее хранилище."
                 )
             }
             // keep = true: тот же WAV понадобится диаризации, второй раз

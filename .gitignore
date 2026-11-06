@@ -38,3 +38,8 @@ android/app/src/main/cpp/whisper.cpp/
 
 # Нативные библиотеки (сорок+ МБ, скачиваются скриптом android/scripts/fetch_libs.sh)
 android/app/libs/
+
+# Исходники llama.cpp (158 МБ) и предсобранные статические библиотеки:
+# клонируются/собираются скриптом android/scripts/build_llama_android.sh
+android/app/src/main/cpp/llama.cpp/
+android/app/src/main/cpp/llama-prebuilt/

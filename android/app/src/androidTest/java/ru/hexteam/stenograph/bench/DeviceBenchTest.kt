@@ -49,7 +49,7 @@ class DeviceBenchTest {
     }
 
     @Test
-    fun diarization_onDevice() = runBlocking {
+    fun diarization_onDevice(): Unit = runBlocking {
         val audio = testAudio()
         val engine = SherpaDiarizationEngine(context)
 
@@ -83,7 +83,7 @@ class DeviceBenchTest {
     }
 
     @Test
-    fun asr_rtf_onDevice() = runBlocking {
+    fun asr_rtf_onDevice(): Unit = runBlocking {
         val audio = testAudio()
         val wav = AudioPrep.prepare(context, audio, keep = true)!!
         val (samples, rate) = WavReader.read(wav)

@@ -39,11 +39,15 @@ class LocalLlmEngine(
         private const val TAG = "LocalLlm"
 
         /**
-         * Модель: Qwen2.5-1.5B-Instruct, квантизация Q4_K_M (~1 ГБ).
-         * Выбрана по A/B-замеру на ПК: понимает русский, укладывается в RAM
-         * среднего телефона, пунктуация не ухудшает WER.
+         * Модель: Qwen2.5-0.5B-Instruct, квантизация Q4_K_M (469 МБ).
+         *
+         * Почему 0.5B, а не 1.5B: задача узкая — пунктуация и регистр. На ПК
+         * A/B-замер показал, что переписывание текста моделью ухудшает WER
+         * (0.144 → 0.155), поэтому 1.5B не даёт выигрыша в точности, но
+         * занимает втрое больше RAM и заметно медленнее на телефоне.
+         * Замеры на устройстве — docs/benchmarks/measurements.csv.
          */
-        const val DEFAULT_MODEL = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+        const val DEFAULT_MODEL = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
 
         /** Допустимое изменение длины текста после пунктуации. */
         private const val MAX_LENGTH_RATIO = 0.30
@@ -59,6 +63,10 @@ class LocalLlmEngine(
     }
 
     override fun isReady(): Boolean = modelFile.isFile && modelFile.length() > 0
+
+    /** Достаёт модель из assets при первом запуске (сеть не нужна). */
+    fun install(onProgress: (String) -> Unit = {}): Boolean =
+        ModelStore.installLlm(appContext, modelFile.name, onProgress)
 
     override suspend fun clean(text: String): String = withContext(Dispatchers.Default) {
         if (text.isBlank() || !isReady()) return@withContext text

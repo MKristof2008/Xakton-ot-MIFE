@@ -41,6 +41,12 @@ object ModelStore {
         segmentation(context).let { it.isFile && it.length() > 0 } &&
             embedding(context).let { it.isFile && it.length() > 0 }
 
+    fun llmModel(context: Context, name: String): File = File(llmDir(context), name)
+
+    /** Готова ли локальная LLM. */
+    fun llmReady(context: Context, name: String): Boolean =
+        llmModel(context, name).let { it.isFile && it.length() > 0 }
+
     /**
      * Копирует модели из assets в filesDir. Идемпотентна: уже скопированные
      * файлы не перезаписываются.
@@ -48,19 +54,43 @@ object ModelStore {
      * @return true, если после вызова модели диаризации на месте.
      */
     fun installDiarization(context: Context, onProgress: (String) -> Unit = {}): Boolean {
-        val targets = listOf(
-            "models/$DIAR_DIR/$SEGMENTATION" to segmentation(context),
-            "models/$DIAR_DIR/$EMBEDDING" to embedding(context),
+        copyFromAssets(
+            context,
+            listOf(
+                "models/$DIAR_DIR/$SEGMENTATION" to segmentation(context),
+                "models/$DIAR_DIR/$EMBEDDING" to embedding(context),
+            ),
+            onProgress,
         )
+        return diarizationReady(context)
+    }
+
+    /**
+     * Копирует модель локальной LLM из assets. Файл большой (сотни МБ),
+     * поэтому копирование делается один раз и только если модели ещё нет.
+     */
+    fun installLlm(context: Context, name: String, onProgress: (String) -> Unit = {}): Boolean {
+        copyFromAssets(context, listOf("models/$LLM_DIR/$name" to llmModel(context, name)), onProgress)
+        return llmReady(context, name)
+    }
+
+    /**
+     * Копирование assets → filesDir.
+     *
+     * Пишем через временный `.part`: если процесс убьют посреди копирования
+     * (а на 470 МБ это реально), обрезанный файл не будет принят за готовую
+     * модель — при следующем запуске копирование повторится.
+     */
+    private fun copyFromAssets(
+        context: Context,
+        targets: List<Pair<String, File>>,
+        onProgress: (String) -> Unit,
+    ) {
         for ((assetPath, target) in targets) {
             if (target.isFile && target.length() > 0) continue
-            val available = runCatching {
-                context.assets.open(assetPath).close()
-            }.isSuccess
+            val available = runCatching { context.assets.open(assetPath).close() }.isSuccess
             if (!available) continue
             onProgress(target.name)
-            // Пишем через временный файл: прерванное копирование не оставит
-            // обрезанную модель, которую потом примут за готовую.
             val tmp = File(target.parentFile, "${target.name}.part")
             runCatching {
                 context.assets.open(assetPath).use { input ->
@@ -72,7 +102,6 @@ object ModelStore {
                 }
             }.onFailure { tmp.delete() }
         }
-        return diarizationReady(context)
     }
 
     /** Что реально лежит на устройстве — для диагностики в логах и на экране. */

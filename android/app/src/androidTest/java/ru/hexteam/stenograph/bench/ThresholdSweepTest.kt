@@ -55,7 +55,7 @@ class ThresholdSweepTest {
      * Так один замер — один запуск, без пересчёта модели в памяти.
      */
     @Test
-    fun measureThreshold() = runBlocking {
+    fun measureThreshold(): Unit = runBlocking {
         val file = audio()
         val ref = reference()
         // Модели копируются из assets при первом запуске (та же схема, что в приложении).
@@ -86,7 +86,7 @@ class ThresholdSweepTest {
 
     /** Массовый прогон: нужен один раз при подборе, дальше — [measureThreshold]. */
     @Test
-    fun sweepThresholds() = runBlocking {
+    fun sweepThresholds(): Unit = runBlocking {
         val file = audio()
         val ref = reference()
         ModelStore.installDiarization(context)

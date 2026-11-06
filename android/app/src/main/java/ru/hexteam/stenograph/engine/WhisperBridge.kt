@@ -53,11 +53,11 @@ class WhisperBridge(private val context: Context) {
     }
 
     /** Модель уже на устройстве (assets распакованы или положена вручную). */
-    fun modelAvailable(): Boolean =
-        File(context.filesDir, DEFAULT_MODEL_ASSET.substringAfterLast('/')).let {
+    fun modelAvailable(assetPath: String = DEFAULT_MODEL_ASSET): Boolean =
+        File(context.filesDir, assetPath.substringAfterLast('/')).let {
             it.exists() && it.length() > 0
         } || runCatching {
-            context.assets.open(DEFAULT_MODEL_ASSET).close(); true
+            context.assets.open(assetPath).close(); true
         }.getOrDefault(false)
 
     /** Достаёт модель из assets в filesDir один раз. */
@@ -79,7 +79,13 @@ class WhisperBridge(private val context: Context) {
     private external fun nativeRelease(handle: Long)
 
     companion object {
-        const val DEFAULT_MODEL_ASSET = "models/ggml-tiny.bin"
+        /**
+         * Модель по умолчанию. base, а не tiny: на живых прогонах tiny
+         * давал галлюцинации и нечитаемый текст (docs/runs/run-003.md), а
+         * разница в скорости на Release-сборке не критична. Выбор закреплён
+         * замером WER на устройстве — см. docs/benchmarks/measurements.csv.
+         */
+        const val DEFAULT_MODEL_ASSET = "models/ggml-base.bin"
 
         init {
             System.loadLibrary("whisper_jni")

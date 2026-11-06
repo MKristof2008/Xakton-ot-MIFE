@@ -28,15 +28,12 @@ object EnginesFactory {
         useLlm: Boolean = true,
     ): Pipeline {
         ModelStore.installDiarization(context)
-
-        val asr = WhisperAsrEngine(context)
-        val diarization = SherpaDiarizationEngine(context)
-        val llm = LocalLlmEngine(context)
+        LocalLlmEngine(context).install()
 
         return Pipeline(
-            asr = asr,
-            diarization = diarization,
-            llm = llm,
+            asr = WhisperAsrEngine(context),
+            diarization = SherpaDiarizationEngine(context),
+            llm = LocalLlmEngine(context),
         )
     }
 
