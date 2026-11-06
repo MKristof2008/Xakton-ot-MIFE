@@ -175,6 +175,14 @@ Java_ru_hexteam_stenograph_engine_WhisperBridge_nativeTranscribe(
         lines.push_back(std::to_string(t0) + "\t" + std::to_string(t1) + "\t" + text);
     }
 
+    // Полный текст расшифровки в logcat: после каждой записи текст можно
+    // забрать с телефона (adb logcat -s WhisperJNI) для разбора и улучшений.
+    LOGI("=== TRANSCRIPT BEGIN (%d мс аудио) ===", audioMs);
+    for (const auto &line : lines) {
+        LOGI("SEG\t%s", line.c_str());
+    }
+    LOGI("=== TRANSCRIPT END: %zu реплик ===", lines.size());
+
     jclass strClass = env->FindClass("java/lang/String");
     jobjectArray result = env->NewObjectArray(static_cast<jsize>(lines.size()), strClass, nullptr);
     for (size_t i = 0; i < lines.size(); ++i) {
