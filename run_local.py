@@ -12,6 +12,7 @@ import argparse
 import io
 import json
 import sys
+from pathlib import Path
 
 
 def _force_utf8_console() -> None:
@@ -48,16 +49,42 @@ def main() -> None:
     parser.add_argument("--language", default=None,
                         help="язык записи: ru, en и т.д. Без флага — автоопределение")
     parser.add_argument("-o", "--output", default=None, help="куда сохранить JSON")
+    parser.add_argument("--denoise", action="store_true",
+                        help="шумоподавление перед распознаванием (спектральное "
+                             "вычитание + режекция гула). Помогает на шумных "
+                             "записях, на чистых отключается автоматически")
     args = parser.parse_args()
 
     from metrics import RtfTimer, audio_duration_sec
 
     timer = RtfTimer()
 
-    # 1. ASR
+    # 0. Шумоподавление (по флагу --denoise)
+    audio_path = args.audio
+    temp_wav = None
+    if args.denoise:
+        import audio_utils
+        import denoise as dn
+
+        source = audio_utils.decode_audio(args.audio)
+        cleaned = dn.denoise(source)
+        unchanged = (len(source) == len(cleaned)
+                     and float(abs(source - cleaned).max()) < 1e-7)
+        if unchanged:
+            print(f"[0/4] Шумоподавление пропущено: SNR {dn.snr_estimate(source):.0f} дБ "
+                  f"(запись чистая или шум слишком сильный)", file=sys.stderr)
+        else:
+            temp_wav = Path(args.audio).with_suffix(".denoised.wav")
+            audio_utils.write_wav(temp_wav, cleaned)
+            audio_path = str(temp_wav)
+            print(f"[0/4] Шумоподавление: SNR {dn.snr_estimate(source):.1f} -> "
+                  f"{dn.snr_estimate(cleaned):.1f} дБ -> {temp_wav.name}",
+                  file=sys.stderr)
+
+    # 2. ASR
     print("[1/4] Распознавание речи...", file=sys.stderr)
     from asr import transcribe
-    segments = transcribe(args.audio, model_size=args.model, language=args.language)
+    segments = transcribe(audio_path, model_size=args.model, language=args.language)
     if args.language is None:
         print(f"      язык определён: {getattr(transcribe, 'last_language', '?')}",
               file=sys.stderr)
@@ -95,7 +122,7 @@ def main() -> None:
     duration = None
     for probe in (probe_duration, audio_duration_sec):
         try:
-            duration = probe(args.audio)
+            duration = probe(audio_path)
             if duration and duration > 0:
                 break
         except Exception:
@@ -115,6 +142,13 @@ def main() -> None:
     if rtf is not None:
         print(f"RTF: {rtf:.2f}", file=sys.stderr)
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
+    # Временный очищенный WAV не оставляем: он нужен был только для ASR
+    if temp_wav is not None:
+        try:
+            temp_wav.unlink()
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
