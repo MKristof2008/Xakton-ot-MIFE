@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Нейро-стенографист — макет интерфейса</title>
+<style>
+  :root {
+    --bg: #0B0E14;
+    --surface: #141A24;
+    --surface-2: #1C2430;
+    --border: #26303F;
+    --primary: #6C8EFF;
+    --primary-dim: #2B3A66;
+    --violet: #A78BFA;
+    --green: #34D399;
+    --amber: #F59E0B;
+    --pink: #F472B6;
+    --text: #E8EDF5;
+    --muted: #8B98AC;
+    --dim: #5A6779;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #06080C;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    padding: 40px;
+  }
+  .board { display: flex; gap: 36px; justify-content: center; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .caption {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .phone {
+    width: 340px;
+    height: 720px;
+    background: var(--bg);
+    border-radius: 34px;
+    border: 7px solid #1A212C;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55);
+  }
+  .statusbar {
+    height: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 18px;
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .screen { flex: 1; display: flex; flex-direction: column; padding: 0 18px 18px; overflow: hidden; }
+
+  /* ---------- общие элементы ---------- */
+  .h1 { font-size: 21px; font-weight: 700; letter-spacing: -.02em; }
+  .sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px;
+  }
+  .btn {
+    background: var(--primary);
+    color: #0B0E14;
+    font-weight: 650;
+    font-size: 14px;
+    text-align: center;
+    padding: 13px;
+    border-radius: 13px;
+  }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-weight: 600;
+    font-size: 14px;
+    text-align: center;
+    padding: 13px;
+    border-radius: 13px;
+  }
+  .icon { width: 18px; height: 18px; display: inline-block; vertical-align: middle; }
+
+  /* ---------- экран 1: импорт ---------- */
+  .top-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0 18px; }
+  .gear {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 15px;
+  }
+  .dropzone {
+    border: 1.5px dashed #35435A;
+    border-radius: 18px;
+    padding: 26px 16px;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(108,142,255,.06), rgba(108,142,255,0));
+    margin-bottom: 20px;
+  }
+  .plus {
+    width: 46px; height: 46px; border-radius: 14px;
+    background: var(--primary-dim); color: var(--primary);
+    font-size: 24px; font-weight: 300;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px;
+  }
+  .dz-title { font-size: 14px; font-weight: 620; margin-bottom: 4px; }
+  .dz-hint { font-size: 11px; color: var(--dim); }
+  .section-label {
+    font-size: 11px; color: var(--muted); font-weight: 650;
+    text-transform: uppercase; letter-spacing: .06em;
+    margin: 4px 0 10px;
+  }
+  .file-row {
+    display: flex; align-items: center; gap: 11px;
+    padding: 11px; border-radius: 13px;
+    background: var(--surface); border: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .file-ico {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--surface-2); color: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0;
+  }
+  .file-name { font-size: 13px; font-weight: 580; }
+  .file-meta { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .spacer { flex: 1; }
+  .bottom-actions { display: flex; flex-direction: column; gap: 9px; }
+
+  /* ---------- экран 2: обработка ---------- */
+  .proc-head { text-align: center; padding: 6px 0 14px; }
+  .ring-wrap { position: relative; width: 150px; height: 150px; margin: 6px auto 18px; }
+  .ring-bg { fill: none; stroke: var(--surface-2); stroke-width: 9; }
+  .ring-fg { fill: none; stroke: url(#grad); stroke-width: 9; stroke-linecap: round; }
+  .ring-label {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .pct { font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
+  .pct-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .stage {
+    display: flex; align-items: center; gap: 11px;
+    padding: 10px 0;
+    font-size: 13px;
+  }
+  .stage-dot {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .done { background: rgba(52,211,153,.15); color: var(--green); }
+  .active { background: var(--primary-dim); color: var(--primary); }
+  .pending { background: var(--surface-2); color: var(--dim); }
+  .stage-name { flex: 1; }
+  .stage-time { font-size: 11px; color: var(--dim); }
+  .stage.is-active .stage-name { color: var(--text); font-weight: 600; }
+  .stage.is-pending .stage-name { color: var(--dim); }
+  .eta {
+    margin-top: 12px; padding: 11px 13px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; font-size: 12px; color: var(--muted);
+    display: flex; justify-content: space-between;
+  }
+  .eta b { color: var(--text); font-weight: 620; }
+
+  /* ---------- экран 3: расшифровка ---------- */
+  .res-head { padding: 6px 0 12px; }
+  .res-meta { display: flex; gap: 12px; font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .legend { display: flex; gap: 7px; margin-bottom: 12px; flex-wrap: wrap; }
+  .chip {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600;
+    padding: 5px 10px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .utter {
+    display: flex; gap: 10px;
+    padding: 11px 0;
+  }
+  .utter + .utter { border-top: 1px solid #1A222E; }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .u-body { flex: 1; min-width: 0; }
+  .u-top { display: flex; gap: 8px; align-items: baseline; margin-bottom: 3px; }
+  .u-name { font-size: 11px; font-weight: 680; }
+  .u-time { font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .u-text { font-size: 13px; line-height: 1.45; color: #CFD8E5; }
+  .transcript-scroll { flex: 1; overflow: hidden; position: relative; }
+  .fade {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 60px;
+    background: linear-gradient(180deg, transparent, var(--bg));
+  }
+
+  /* ---------- экран 4: экспорт ---------- */
+  .dim-bg { position: absolute; inset: 0; background: rgba(3,5,9,.72); }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: var(--surface);
+    border-radius: 22px 22px 0 0;
+    border-top: 1px solid var(--border);
+    padding: 10px 18px 20px;
+  }
+  .grabber {
+    width: 34px; height: 4px; border-radius: 2px;
+    background: #35435A; margin: 0 auto 14px;
+  }
+  .sheet-title { font-size: 16px; font-weight: 680; margin-bottom: 3px; }
+  .sheet-sub { font-size: 11px; color: var(--dim); margin-bottom: 14px; }
+  .exp-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px; border-radius: 13px;
+    background: var(--surface-2); margin-bottom: 8px;
+  }
+  .exp-ico {
+    width: 34px; height: 34px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+  }
+  .exp-title { font-size: 13px; font-weight: 600; }
+  .exp-sub { font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+  .exp-badge {
+    font-size: 9.5px; font-weight: 700; padding: 3px 7px; border-radius: 6px;
+    background: rgba(108,142,255,.16); color: var(--primary);
+    letter-spacing: .04em;
+  }
+</style>
+</head>
+<body>
+
+<div class="board">
+
+  <!-- ============ 1. ИМПОРТ ============ -->
+  <div class="col">
+    <div class="caption">1 · Главный экран</div>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>◐ ▮▮▮</span></div>
+      <div class="screen">
+        <div class="top-row">
+          <div>
+            <div class="h1">Нейро-стенографист</div>
+            <div class="sub">Локально · без интернета</div>
+          </div>
+          <div class="gear">⚙</div>
+        </div>
+
+        <div class="dropzone">
+          <div class="plus">+</div>
+          <div class="dz-title">Загрузите запись</div>
+          <div class="dz-hint">MP3 · WAV · M4A · до 2 ГБ</div>
+        </div>
+
+        <div class="section-label">Недавние</div>
+        <div class="file-row">
+          <div class="file-ico">♪</div>
+          <div>
+            <div class="file-name">Совещание 6 ноября</div>
+            <div class="file-meta">12:34 · 2 говорящих</div>
+          </div>
+        </div>
+        <div class="file-row">
+          <div class="file-ico">♪</div>
+          <div>
+            <div class="file-name">Интервью · шум</div>
+            <div class="file-meta">04:12 · 3 говорящих</div>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="bottom-actions">
+          <div class="btn">Выбрать файл</div>
+          <div class="btn-ghost">Записать с микрофона</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2. ОБРАБОТКА ============ -->
+  <div class="col">
+    <div class="caption">2 · Обработка</div>
+    <div class="phone">
+      <div class="statusbar"><span>9:42</span><span>◐ ▮▮▮</span></div>
+      <div class="screen">
+        <div class="proc-head">
+          <div class="h1" style="font-size:17px">Совещание 6 ноября</div>
+          <div class="sub">12:34 · обработка на устройстве</div>
+        </div>
+
+        <div class="ring-wrap">
+          <svg width="150" height="150" viewBox="0 0 150 150">
+            <defs>
+              <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#6C8EFF"/>
+                <stop offset="100%" stop-color="#A78BFA"/>
+              </linearGradient>
+            </defs>
+            <circle class="ring-bg" cx="75" cy="75" r="64"/>
+            <circle class="ring-fg" cx="75" cy="75" r="64"
+                    stroke-dasharray="402"
+                    stroke-dashoffset="129"
+                    transform="rotate(-90 75 75)"/>
+          </svg>
+          <div class="ring-label">
+            <div class="pct">68%</div>
+            <div class="pct-sub">≈ 40 сек</div>
+          </div>
+        </div>
+
+        <div class="stage">
+          <div class="stage-dot done">✓</div>
+          <div class="stage-name">Распознавание речи</div>
+          <div class="stage-time">8.2 с</div>
+        </div>
+        <div class="stage">
+          <div class="stage-dot done">✓</div>
+          <div class="stage-name">Определение говорящих</div>
+          <div class="stage-time">4.6 с</div>
+        </div>
+        <div class="stage is-active">
+          <div class="stage-dot active">◐</div>
+          <div class="stage-name">Сшивка реплик</div>
+          <div class="stage-time">…</div>
+        </div>
+        <div class="stage is-pending">
+          <div class="stage-dot pending">4</div>
+          <div class="stage-name">Пунктуация</div>
+          <div class="stage-time">—</div>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="eta">
+          <span>Режим</span>
+          <b>Полностью офлайн</b>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 3. РАСШИФРОВКА ============ -->
+  <div class="col">
+    <div class="caption">3 · Расшифровка</div>
+    <div class="phone">
+      <div class="statusbar"><span>9:43</span><span>◐ ▮▮▮</span></div>
+      <div class="screen">
+        <div class="res-head">
+          <div class="h1" style="font-size:17px">Совещание 6 ноября</div>
+          <div class="res-meta">
+            <span>12:34</span><span>·</span><span>2 говорящих</span>
+            <span>·</span><span>RTF 0.42</span>
+          </div>
+        </div>
+
+        <div class="legend">
+          <div class="chip"><span class="dot" style="background:#6C8EFF"></span>Спикер 1</div>
+          <div class="chip"><span class="dot" style="background:#34D399"></span>Спикер 2</div>
+        </div>
+
+        <div class="transcript-scroll">
+          <div class="utter">
+            <div class="avatar" style="background:rgba(108,142,255,.16);color:#6C8EFF">1</div>
+            <div class="u-body">
+              <div class="u-top">
+                <span class="u-name" style="color:#6C8EFF">Спикер 1</span>
+                <span class="u-time">[00:01]</span>
+              </div>
+              <div class="u-text">Добрый день, коллеги. Начнём совещание.</div>
+            </div>
+          </div>
+
+          <div class="utter">
+            <div class="avatar" style="background:rgba(52,211,153,.16);color:#34D399">2</div>
+            <div class="u-body">
+              <div class="u-top">
+                <span class="u-name" style="color:#34D399">Спикер 2</span>
+                <span class="u-time">[00:06]</span>
+              </div>
+              <div class="u-text">Давайте обсудим сроки по проекту стенографиста.</div>
+            </div>
+          </div>
+
+          <div class="utter">
+            <div class="avatar" style="background:rgba(108,142,255,.16);color:#6C8EFF">1</div>
+            <div class="u-body">
+              <div class="u-top">
+                <span class="u-name" style="color:#6C8EFF">Спикер 1</span>
+                <span class="u-time">[00:14]</span>
+              </div>
+              <div class="u-text">Предлагаю сдать базовый уровень к пятнице.</div>
+            </div>
+          </div>
+
+          <div class="utter">
+            <div class="avatar" style="background:rgba(52,211,153,.16);color:#34D399">2</div>
+            <div class="u-body">
+              <div class="u-top">
+                <span class="u-name" style="color:#34D399">Спикер 2</span>
+                <span class="u-time">[00:21]</span>
+              </div>
+              <div class="u-text">Согласен. Тогда я подготовлю тестовые записи.</div>
+            </div>
+          </div>
+
+          <div class="utter">
+            <div class="avatar" style="background:rgba(108,142,255,.16);color:#6C8EFF">1</div>
+            <div class="u-body">
+              <div class="u-top">
+                <span class="u-name" style="color:#6C8EFF">Спикер 1</span>
+                <span class="u-time">[00:29]</span>
+              </div>
+              <div class="u-text">Хорошо, зафиксируем это как решение.</div>
+            </div>
+          </div>
+          <div class="fade"></div>
+        </div>
+
+        <div class="btn" style="margin-top:12px">Экспорт</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 4. ЭКСПОРТ ============ -->
+  <div class="col">
+    <div class="caption">4 · Экспорт</div>
+    <div class="phone">
+      <div class="statusbar"><span>9:44</span><span>◐ ▮▮▮</span></div>
+      <div class="screen">
+        <div class="res-head">
+          <div class="h1" style="font-size:17px">Совещание 6 ноября</div>
+          <div class="res-meta"><span>12:34</span><span>·</span><span>2 говорящих</span></div>
+        </div>
+        <div class="legend">
+          <div class="chip"><span class="dot" style="background:#6C8EFF"></span>Спикер 1</div>
+          <div class="chip"><span class="dot" style="background:#34D399"></span>Спикер 2</div>
+        </div>
+        <div class="utter">
+          <div class="avatar" style="background:rgba(108,142,255,.16);color:#6C8EFF">1</div>
+          <div class="u-body">
+            <div class="u-top">
+              <span class="u-name" style="color:#6C8EFF">Спикер 1</span>
+              <span class="u-time">[00:01]</span>
+            </div>
+            <div class="u-text">Добрый день, коллеги. Начнём совещание.</div>
+          </div>
+        </div>
+        <div class="utter">
+          <div class="avatar" style="background:rgba(52,211,153,.16);color:#34D399">2</div>
+          <div class="u-body">
+            <div class="u-top">
+              <span class="u-name" style="color:#34D399">Спикер 2</span>
+              <span class="u-time">[00:06]</span>
+            </div>
+            <div class="u-text">Давайте обсудим сроки по проекту.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dim-bg"></div>
+      <div class="sheet">
+        <div class="grabber"></div>
+        <div class="sheet-title">Экспорт расшифровки</div>
+        <div class="sheet-sub">5 реплик · 2 говорящих</div>
+
+        <div class="exp-row">
+          <div class="exp-ico" style="background:rgba(108,142,255,.16);color:#6C8EFF">{ }</div>
+          <div style="flex:1">
+            <div class="exp-title">JSON</div>
+            <div class="exp-sub">Структура по требованиям хакатона</div>
+          </div>
+          <div class="exp-badge">ТЗ</div>
+        </div>
+
+        <div class="exp-row">
+          <div class="exp-ico" style="background:rgba(167,139,250,.16);color:#A78BFA">T</div>
+          <div style="flex:1">
+            <div class="exp-title">Текст</div>
+            <div class="exp-sub">Читаемый вид с таймкодами</div>
+          </div>
+        </div>
+
+        <div class="exp-row">
+          <div class="exp-ico" style="background:rgba(52,211,153,.16);color:#34D399">W</div>
+          <div style="flex:1">
+            <div class="exp-title">Документ</div>
+            <div class="exp-sub">Для печати и правок</div>
+          </div>
+        </div>
+
+        <div class="btn" style="margin-top:14px">Сохранить</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
