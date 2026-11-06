@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import ru.hexteam.stenograph.MainActivity
-import ru.hexteam.stenograph.R
 
 /**
  * Foreground service: держит процесс живым, пока идёт обработка аудио.
