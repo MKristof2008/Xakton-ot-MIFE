@@ -73,20 +73,31 @@ def main() -> None:
     print("[4/4] Сборка результата...", file=sys.stderr)
     from output import build_result, save_result
     from metrics import audio_duration_sec
+    from asr import audio_duration_sec as probe_duration
 
-    try:
-        duration_ms = int(audio_duration_sec(args.audio) * 1000)
-    except Exception:
-        duration_ms = None
+    # Важно: metrics.audio_duration_sec читает только WAV (модуль wave).
+    # Для mp3/m4a он падает, и тогда duration_ms=None — то есть защита от
+    # сегментов за концом записи молча отключается. Поэтому основной путь —
+    # asr.audio_duration_sec, который работает через ffmpeg/PyAV.
+    duration = None
+    for probe in (probe_duration, audio_duration_sec):
+        try:
+            duration = probe(args.audio)
+            if duration and duration > 0:
+                break
+        except Exception:
+            duration = None
+    duration_ms = int(duration * 1000) if duration else None
+    if duration_ms is None:
+        print("      ВНИМАНИЕ: длительность аудио не определена, "
+              "проверка границ отключена", file=sys.stderr)
+
     result = build_result(segments, duration_ms=duration_ms)
 
     out_path = args.output or args.audio.rsplit(".", 1)[0] + ".hex.json"
     save_result(result, out_path, duration_ms=duration_ms)
 
-    try:
-        rtf = timer.rtf(audio_duration_sec(args.audio))
-    except Exception:
-        rtf = None  # не wav — длительность без ffmpeg не узнать
+    rtf = timer.rtf(duration) if duration else None
     print(f"Готово: {out_path}", file=sys.stderr)
     if rtf is not None:
         print(f"RTF: {rtf:.2f}", file=sys.stderr)
