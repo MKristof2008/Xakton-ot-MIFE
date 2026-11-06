@@ -19,13 +19,22 @@ def _force_utf8_console() -> None:
 
     Переключаем stdout/stderr на UTF-8 и не падаем на непечатаемых символах:
     вывод в консоль не должен ломать уже готовый результат.
+
+    Функция идемпотентна: повторный вызов ничего не делает. Иначе обёртка
+    накладывалась бы на обёртку и ломала перехват вывода (pytest, subprocess).
     """
     for name in ("stdout", "stderr"):
         stream = getattr(sys, name, None)
         buffer = getattr(stream, "buffer", None)
         if buffer is None:
             continue
-        setattr(sys, name, io.TextIOWrapper(buffer, encoding="utf-8", errors="replace"))
+        encoding = (getattr(stream, "encoding", "") or "").lower()
+        if encoding.replace("-", "") == "utf8":
+            continue  # уже UTF-8, второй раз оборачивать нельзя
+        try:
+            setattr(sys, name, io.TextIOWrapper(buffer, encoding="utf-8", errors="replace"))
+        except Exception:
+            continue  # поток уже закрыт или заменён — не критично для работы
 
 
 def main() -> None:

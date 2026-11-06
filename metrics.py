@@ -49,31 +49,53 @@ def audio_duration_sec(path: str) -> float:
         return w.getnframes() / w.getframerate()
 
 
-def der(reference: list[dict], hypothesis: list[dict]) -> float:
+def der(reference: list[dict], hypothesis: list[dict], step_ms: int = 100) -> float:
     """Упрощённый DER: доля времени с неверно определённым спикером.
 
     reference/hypothesis: сегменты [{"start_ms", "end_ms", "speaker_id"}].
-    Ошибкой считаем время, где множества говорящих не совпадают (грубая оценка).
+
+    Метки сопоставляются жадной перестановкой по объёму совпадений: в ТЗ наш
+    вывод всегда подписан speaker_N, а эталон может быть размечен как A/B/C.
+    Раньше метки сравнивались буквально, и идеальная диаризация с другими
+    именами давала DER 1.0 вместо 0.0.
     """
     if not reference:
         return 0.0
 
-    def total_time(segs: list[dict]) -> float:
-        return sum(max(0, s["end_ms"] - s["start_ms"]) for s in segs)
-
-    # Семплируем шкалу времени шагом 100 мс
-    step = 100
     end = max(s["end_ms"] for s in reference)
-    wrong = 0
-    total = 0
-    for t in range(0, end, step):
-        ref_spk = {s["speaker_id"] for s in reference if s["start_ms"] <= t < s["end_ms"]}
-        hyp_spk = {s["speaker_id"] for s in hypothesis if s["start_ms"] <= t < s["end_ms"]}
-        if not ref_spk:
-            continue
-        total += 1
-        if ref_spk != hyp_spk:
-            wrong += 1
-    if total == 0:
+
+    # Сетка времени: на каждом шаге — кто говорил по эталону и по гипотезе
+    ref_at: list[set[str]] = []
+    hyp_at: list[set[str]] = []
+    for t in range(0, end, step_ms):
+        ref_at.append({s["speaker_id"] for s in reference if s["start_ms"] <= t < s["end_ms"]})
+        hyp_at.append({s["speaker_id"] for s in hypothesis if s["start_ms"] <= t < s["end_ms"]})
+
+    scored = [i for i, r in enumerate(ref_at) if r]
+    if not scored:
         return 0.0
-    return wrong / total
+
+    # Матрица совпадений: сколько шагов каждая пара (эталон, гипотеза) провела вместе
+    ref_labels = sorted({lab for r in ref_at for lab in r})
+    hyp_labels = sorted({lab for h in hyp_at for lab in h})
+    overlap: dict[tuple[str, str], int] = {}
+    for i in scored:
+        for r in ref_at[i]:
+            for h in hyp_at[i]:
+                overlap[(r, h)] = overlap.get((r, h), 0) + 1
+
+    # Жадное сопоставление: самая крупная пара, затем следующая
+    mapping: dict[str, str] = {}
+    used_hyp: set[str] = set()
+    for (r, h), _count in sorted(overlap.items(), key=lambda kv: -kv[1]):
+        if r in mapping or h in used_hyp:
+            continue
+        mapping[r] = h
+        used_hyp.add(h)
+
+    wrong = 0
+    for i in scored:
+        expected = {mapping.get(r, "<нет>") for r in ref_at[i]}
+        if expected != hyp_at[i]:
+            wrong += 1
+    return wrong / len(scored)
