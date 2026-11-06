@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Нейро-стенографист — Nuclear IT Hack 2026</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --ok: #3fb950;
+    --warn: #d29922;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  header {
+    padding: 72px 0 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 40px; line-height: 1.15; margin: 0 0 12px; }
+  .tagline { color: var(--muted); font-size: 18px; margin: 0 0 24px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; }
+  .badge {
+    font-size: 13px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+  }
+  .badge.ok { color: var(--ok); border-color: #238636; }
+  section { padding: 48px 0; border-bottom: 1px solid var(--border); }
+  h2 { font-size: 24px; margin: 0 0 20px; }
+  h3 { font-size: 17px; margin: 24px 0 8px; }
+  p { margin: 0 0 12px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .card h3 { margin-top: 0; }
+  .card p { color: var(--muted); font-size: 14px; margin: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num { font-variant-numeric: tabular-nums; color: var(--accent); }
+  code {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 6px;
+    font: 14px ui-monospace, Consolas, monospace;
+  }
+  pre {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    overflow-x: auto;
+    font: 14px/1.5 ui-monospace, Consolas, monospace;
+  }
+  pre code { background: none; border: 0; padding: 0; }
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    margin: 16px 0;
+  }
+  .step {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+  }
+  .arrow { color: var(--muted); }
+  ul { margin: 0 0 12px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  .muted { color: var(--muted); }
+  footer { padding: 40px 0 64px; color: var(--muted); font-size: 14px; }
+  a { color: var(--accent); }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Нейро-стенографист</h1>
+    <p class="tagline">
+      Локальное преобразование аудиозаписей в структурированную расшифровку
+      с разделением говорящих. Всё на устройстве, без интернета.
+    </p>
+    <div class="badges">
+      <span class="badge ok">Nuclear IT Hack 2026</span>
+      <span class="badge">Android</span>
+      <span class="badge">Kotlin · Compose</span>
+      <span class="badge">Офлайн</span>
+      <span class="badge">Команда Hex.Team</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>Что это</h2>
+    <p>
+      Приложение принимает запись разговора из памяти Android-устройства и выдаёт
+      расшифровку: кто говорил, в какое время и что именно. Результат можно посмотреть
+      в приложении и экспортировать в JSON.
+    </p>
+    <div class="flow">
+      <span class="step">Аудиофайл</span>
+      <span class="arrow">→</span>
+      <span class="step">Распознавание речи</span>
+      <span class="arrow">→</span>
+      <span class="step">Определение говорящих</span>
+      <span class="arrow">→</span>
+      <span class="step">Сшивка реплик</span>
+      <span class="arrow">→</span>
+      <span class="step">Пунктуация</span>
+      <span class="arrow">→</span>
+      <span class="step">JSON</span>
+    </div>
+    <p class="muted">
+      Все этапы выполняются на устройстве. Приложение не запрашивает разрешение
+      на интернет — это техническая гарантия офлайн-работы, а не обещание.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Формат результата</h2>
+    <p>Структура строго по техническому заданию:</p>
+    <pre><code>{
+  "transcript": [
+    {
+      "speaker_id": "speaker_1",
+      "start_ms": 1250,
+      "end_ms": 4380,
+      "text": "Добрый день!"
+    }
+  ]
+}</code></pre>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Состояние разработки</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Готово</h3>
+        <p>Контракты данных, сшивка ASR и диаризации, экспорт JSON, метрики WER/DER/RTF, интерфейс на Compose, сборка APK.</p>
+      </div>
+      <div class="card">
+        <h3>В работе</h3>
+        <p>Подключение локальных моделей распознавания речи, диаризации и языковой модели вместо заглушек.</p>
+      </div>
+      <div class="card">
+        <h3>Дальше</h3>
+        <p>Замер точности на контрольных записях, оптимизация скорости, обработка шумных записей и перебиваний.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Критерии оценки и где мы их закрываем</h2>
+    <table>
+      <thead>
+        <tr><th>Критерий</th><th>Баллы</th><th>Ответственный слой</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Точность транскрибации (WER)</td><td class="num">40</td><td>Модуль распознавания речи</td></tr>
+        <tr><td>Точность диаризации (DER)</td><td class="num">25</td><td>Модуль определения говорящих</td></tr>
+        <tr><td>Точность временных меток</td><td class="num">10</td><td>Сшивка реплик</td></tr>
+        <tr><td>Скорость обработки (RTF)</td><td class="num">10</td><td>Квантизация моделей, потоки</td></tr>
+        <tr><td>Работоспособность и UX</td><td class="num">10</td><td>Интерфейс приложения</td></tr>
+        <tr><td>Защита решения</td><td class="num">5</td><td>Документация и архитектура</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Архитектура</h2>
+    <p>
+      Четыре независимых модуля соединены контрактами. Это позволяет вести разработку
+      параллельно и подменять любую модель без переписывания остального.
+    </p>
+    <div class="grid">
+      <div class="card">
+        <h3>Распознавание речи</h3>
+        <p><code>transcribe(path)</code> → список сегментов с таймкодами в миллисекундах.</p>
+      </div>
+      <div class="card">
+        <h3>Диаризация</h3>
+        <p><code>diarize(path)</code> → интервалы речи с идентификатором говорящего.</p>
+      </div>
+      <div class="card">
+        <h3>Сшивка</h3>
+        <p><code>merge(segments, speakers)</code> → реплики «кто, когда, что».</p>
+      </div>
+      <div class="card">
+        <h3>Языковая модель</h3>
+        <p><code>clean(text)</code> → пунктуация и регистр без изменения смысла.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Ограничения</h2>
+    <ul>
+      <li>Модели работают полностью на устройстве — качество зависит от модели телефона.</li>
+      <li>Одновременная речь нескольких участников распознаётся хуже, чем последовательная.</li>
+      <li>Сильный фоновый шум снижает точность распознавания.</li>
+      <li>Языковая модель не перефразирует текст: она только расставляет пунктуацию.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="status"><span class="dot"></span> Сборка проходит, тесты ядра зелёные.</p>
+    <p>Команда Hex.Team · Nuclear IT Hack 2026 · программа ИВТ 2.0, МИФИ</p>
+  </div>
+</footer>
+
+</body>
+</html>

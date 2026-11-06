@@ -1,4 +1,33 @@
+# Python-прототип
 .env
 __pycache__/
 *.pyc
 .venv/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Модели (весят сотни мегабайт, в git не кладём)
+android/app/src/main/assets/models/
+models/
+*.bin
+*.onnx
+*.gguf
+
+# Тестовые записи и артефакты
+artifacts/test-results/*.wav
+artifacts/test-results/*.mp3
+artifacts/test-results/*.m4a
+
+# ОС и редакторы
+.DS_Store
+Thumbs.db
+*.swp
