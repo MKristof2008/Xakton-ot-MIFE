@@ -1,0 +1,1 @@
+config,model,quant,threads,denoise,llm,device,file,audio_ms,inference_ms,rtf,wer,der,ram_mb,model_size_mb,notes
