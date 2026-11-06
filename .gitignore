@@ -31,3 +31,7 @@ artifacts/test-results/*.m4a
 .DS_Store
 Thumbs.db
 *.swp
+
+# Сборочный кэш NDK и вендор whisper.cpp (клонируется по инструкции в README)
+android/app/.cxx/
+android/app/src/main/cpp/whisper.cpp/

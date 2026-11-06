@@ -37,7 +37,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val error: String? = null,
         val expectedSpeakers: Int? = null,
         val useLlm: Boolean = true,
-        val usingStubs: Boolean = BuildConfig.DEBUG,
+        val usingStubs: Boolean = true,
         val rtf: Double = 0.0,
     ) {
         val isBusy: Boolean
@@ -51,8 +51,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    private val whisperAsr = ru.hexteam.stenograph.engine.WhisperAsrEngine(getApplication())
+
     private val pipeline = Pipeline(
-        asr = Stubs.StubAsr(),
+        asr = if (whisperAsr.isReady()) whisperAsr else Stubs.StubAsr(),
         diarization = Stubs.StubDiarization(),
         llm = Stubs.StubLlm(),
     )
@@ -113,7 +115,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun reset() {
-        _state.update { UiState(usingStubs = BuildConfig.DEBUG) }
+        _state.update { UiState(usingStubs = !whisperAsr.isReady()) }
     }
 
     /** Копирует выбранный файл во внутреннее хранилище: движки работают с путём, не с Uri. */
