@@ -1,7 +1,7 @@
 # Полное ТЗ «Нейро-стенографист» — 4 роли
 
 **Кейс:** Hex.Team, Nuclear IT Hack 2026 (осень, МИФИ)
-**Источники:** [`hackathon-task-hex-team.pdf`](hackathon-task-hex-team.pdf) — официальное задание (слайды 7–23); [`neuro-stenographer-draft.pdf`](neuro-stenographer-draft.pdf) — ранний набросок распределения ролей.
+**Источники:** [`docs/hackathon-task-hex-team.pdf`](docs/hackathon-task-hex-team.pdf) — официальное задание (слайды 7–23); [`docs/neuro-stenographer-team-draft.pdf`](docs/neuro-stenographer-team-draft.pdf) — ранний набросок распределения ролей.
 **Статус документа:** актуальное ТЗ. Заменяет `TZ_FOR_TEAM.md` (тот — по компонентам, без ролей, без Android).
 
 ---
