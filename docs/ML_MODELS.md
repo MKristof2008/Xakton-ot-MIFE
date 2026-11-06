@@ -3,6 +3,55 @@
 Все цифры — реальные измерения на этом репозитории, если не указано иное.
 Устройство замеров на ПК: Windows, CPU (без GPU). Целевое устройство: Android (SM-S938B).
 
+## Архитектура ML-пайплайна (на устройстве)
+
+```
+аудио (любой формат)
+  → AudioConverter (MediaCodec) → WAV 16 кГц моно
+  → Whisper base (whisper.cpp, JNI, CPU arm64) → сегменты с таймкодами
+  → фильтр галлюцинаций (границы > конца записи, пустой текст)
+  → диаризация (sherpa-onnx, в разработке) → speaker_N
+  → сшивка реплик с говорящими
+  → локальная LLM (только пунктуация/регистр, флаг включения)
+  → Transcript JSON {"transcript":[{speaker_id,start_ms,end_ms,text}]}
+```
+
+Инференс полностью локальный: в манифесте нет разрешения INTERNET
+(проверено `aapt2 dump permissions`).
+
+## ASR на устройстве: реализация
+
+- Движок: **whisper.cpp** (master), собран из исходников в APK через
+  CMake/NDK (`android/app/src/main/cpp/`). faster-whisper не подошёл:
+  у ctranslate2 нет Android-сборок (проверено по PyPI).
+- Модель: **ggml-base.bin** (~148 МБ, ~74M параметров, лицензия MIT,
+  формат GGML). Кладётся в `filesDir/ggml-base.bin` (adb push при подготовке
+  к защите), fallback — `assets/models/`.
+  Причина смены small → base: живой замер на телефоне (SM-S938B) показал
+  **RTF = 16.44** у small (517.8 с инференса на 31.5 с записи) — неприемлемо
+  медленно даже с flash_attn и 8 потоками. base в ~3 раза легче; реальный
+  RTF base на телефоне — TODO (замер после живого теста).
+- Код: `engine/WhisperBridge.kt` (JNI), `engine/WhisperAsrEngine.kt`,
+  `android/app/src/main/cpp/whisper_jni.cpp`.
+- Оптимизации (коммит 41295b4): `flash_attn = true`, автоподбор потоков
+  (`hardware_concurrency/2`, в пределах 4–8), замер RTF в logcat (тег WhisperJNI),
+  greedy-декодинг, `no_context = true` против зацикливания.
+- Фильтр спецтокенов (коммит cf1d643): токены с id ≥ `whisper_token_eot`
+  (`[_BEG_]`, `[_TT_*]`) вырезаются из текста сегментов в JNI.
+- Полный транскрипт каждого прогона пишется в logcat (коммит 09709dc):
+  маркеры `=== TRANSCRIPT BEGIN/END ===`, строки `SEG\tstart\tend\ttext`.
+
+## Графики измерений
+
+![WER моделей](img/wer_models.png)
+
+![A/B роль LLM](img/wer_llm_ab.png)
+
+![RTF](img/rtf.png)
+
+Графики строятся скриптом `tools/make_ml_charts.py` из цифр этого документа
+(ничего не выдумано: нет измерения — нет столбца).
+
 ## Тестовый набор
 
 `artifacts/test-audio/` — 20 записей русской речи (VoxForge, 16 кГц моно) + эталонные
@@ -13,14 +62,15 @@
 | Модель | Движок | Размер | WER (20 записей RU) | RTF (ПК CPU) | Android | Лицензия | Вердикт |
 |---|---|---|---|---|---|---|---|
 | Whisper tiny | faster-whisper int8 | ~75 МБ | **0.345** | ~0.25 | whisper.cpp / sherpa-onnx | MIT | Нет: WER плохой |
-| Whisper base | faster-whisper int8 | ~145 МБ | TODO | TODO | да | MIT | Запасной |
-| Whisper small | faster-whisper int8 | ~480 МБ | **0.161** | **0.81** (5 записей) | да (q5/q8) | MIT | **Выбран** |
+| Whisper base | faster-whisper int8 / ggml | ~148 МБ | **0.092** (ПК) | TODO (ПК) | **да, на телефоне** | MIT | **Выбран для устройства** |
+| Whisper small | faster-whisper int8 | ~480 МБ | **0.161** | **0.81** (5 записей, ПК) | да, но RTF=16.44 на телефоне | MIT | Точнее, но слишком медленный |
 | Whisper small | faster-whisper float16 | ~950 МБ | TODO | TODO | нет (тяжёлый) | MIT | Нет для телефона |
-| GigaAM v2 (RNNT/CTC) | onnx / sherpa-onnx | ~250–600 МБ | TODO | TODO | sherpa-onnx | проверить | Кандидат если small не влезет в RTF |
+| GigaAM v2 (RNNT/CTC) | onnx / sherpa-onnx | ~250–600 МБ | TODO | TODO | sherpa-onnx | проверить | Кандидат если base не влезет в RTF |
 | Zipformer RU (sherpa-onnx) | sherpa-onnx | ~200 МБ | TODO | TODO | да, быстрый | проверить | Кандидат по скорости |
 
-Выбран **Whisper small (int8/q5)** как базовый: измеренный WER 0.161 близок к цели <0.15,
-модель свободная, есть проверенные пути портирования на Android (whisper.cpp, sherpa-onnx).
+Выбран **Whisper base (ggml)** для устройства: small на SM-S938B даёт RTF 16.44
+(провал по баллам за скорость), base легче в ~3 раза при WER 0.092 на ПК-наборе.
+Окончательный выбор — после живого замера RTF base на телефоне.
 
 ## Диаризация — кандидаты
 
@@ -67,14 +117,42 @@
 
 ## Хранение на устройстве (без сети)
 
-Whisper small int8 (~480 МБ) + сегментация (~6 МБ) + embedding (~30 МБ) + LLM (~1 ГБ)
+Whisper base (~148 МБ) + сегментация (~6 МБ) + embedding (~30 МБ) + LLM (~1 ГБ)
 → слишком много для git и тяжело для APK. Предложение (согласовать с капитаном):
 - в git — только скрипты скачивания и хэши (Git LFS или внешнее хранилище);
 - в APK/assets — только сегментация+embedding (мелкие);
 - ASR и LLM-модели кладутся в `filesDir/models/` — для защиты заранее копируем через adb
   (ТЗ требует «модели на устройстве к моменту проверки», не обязательно внутри APK).
 
+## Живые замеры на телефоне (SM-S938B, whisper.cpp JNI)
+
+| Модель | Запись | Инференс | RTF | Вердикт |
+|---|---|---|---|---|
+| ggml-small.bin | 31 488 мс | 517 773 мс | **16.44** | Неприемлемо медленно → заменена |
+| ggml-base.bin | TODO (живой тест №2) | TODO | TODO | Текущая |
+
+## Шумоподавление (предобработка перед ASR)
+
+Кандидаты по официальной документации sherpa-onnx (speech-enhancement),
+все в ONNX, лицензии подлежат проверке перед включением в APK:
+
+| Модель | Размер | Параметры / вычисления | RTF (ПК, заявл.) | Примечание |
+|---|---|---|---|---|
+| GTCRN (`gtcrn_simple.onnx`) | **523 КБ** | — | 0.071 | Самая лёгкая; источник: релизы k2-fsa/sherpa-onnx, оригинал Xiaobin-Rong/gtcrn (IEEE 10448310) |
+| DPDFNet baseline | ~9 МБ | 2.31M / 0.36 GMACs | TODO | Самый быстрый из DPDFNet |
+| DPDFNet2 | ~10 МБ | 2.49M / 1.35 GMACs | TODO | Ориентирован на embedded |
+| DPDFNet4 / DPDFNet8 | больше | выше | TODO | Лучшее качество в семействе |
+
+План: поднять `OfflineSpeechDenoiser` (если стек sherpa-onnx) или отдельный
+ONNX Runtime для GTCRN перед whisper.cpp; измерить WER на шумной записи
+с денойзером и без (есть параметр attenuation-limit-db против пересупрессии).
+На будущее: sherpa-onnx 2.0.1 добавил VoxLock (изоляция целевого спикера).
+
 ## Открытые вопросы
 
 1. HF-токен для pyannote 3.1 (gated) — для референсного DER на ПК.
 2. Лимит размера APK у организаторов? От этого зависит схема хранения.
+3. Выбор стека на устройстве: наш whisper.cpp JNI (ветка feature/ml) против
+   sherpa-onnx AAR в main (коммит 49c71e9, ASR + диаризация из коробки) —
+   решение за капитаном; аргумент за наш стек — реальный RTF на целевом
+   телефоне, аргумент за sherpa-onnx — диаризация из коробки.
