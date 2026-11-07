@@ -52,6 +52,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val speakerLabels: Map<String, String> = emptyMap(),
         /** Фильтр по говорящему на экране результата; null — все. */
         val speakerFilter: String? = null,
+        /** Голоса, узнанные в базе: «speaker_1» → имя человека. */
+        val recognizedSpeakers: Map<String, String> = emptyMap(),
         val searchQuery: String = "",
     ) {
         val isBusy: Boolean
@@ -83,6 +85,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * подменять работу модели заранее подготовленной расшифровкой.
      */
     private val pipeline = EnginesFactory.create(getApplication())
+
+    /** Отпечатки голосов текущей записи — для сохранения в базу. */
+    private var lastEmbeddings: Map<String, FloatArray> = emptyMap()
+
+    private val speakerEmbeddings = EnginesFactory.speakerEmbeddings(getApplication())
+    private val voiceProfiles = EnginesFactory.voiceProfiles(getApplication())
 
     private var processJob: Job? = null
 
@@ -138,8 +146,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             _state.update { it.copy(stage = stage) }
                             TranscriptionService.update(app, stage.title)
                         },
+                        voiceEngine = speakerEmbeddings,
+                        voiceStore = voiceProfiles,
                     )
                 }
+                lastEmbeddings = result.voiceEmbeddings
+                // Узнанные голоса сразу становятся подписями: в интерфейсе
+                // видно имя, в экспорт по-прежнему идёт speaker_id.
                 _state.update {
                     it.copy(
                         lines = result.lines,
@@ -148,6 +161,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         audioDurationMs = result.durationMs,
                         stage = PipelineStage.DONE,
                         screen = Screen.RESULT,
+                        recognizedSpeakers = result.recognizedSpeakers,
+                        speakerLabels = result.recognizedSpeakers,
                     )
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -192,6 +207,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         process()
     }
 
+    /**
+     * Сохраняет голос говорящего в базу под именем.
+     *
+     * После этого тот же человек в следующих записях будет подписан этим
+     * именем автоматически — ради этого отпечаток и считается.
+     */
+    fun rememberSpeaker(speakerId: String, name: String) {
+        val emb = lastEmbeddings[speakerId] ?: return
+        if (name.isBlank()) return
+        voiceProfiles.enroll(name.trim(), emb)
+        _state.update {
+            it.copy(
+                speakerLabels = it.speakerLabels + (speakerId to name.trim()),
+                recognizedSpeakers = it.recognizedSpeakers + (speakerId to name.trim()),
+            )
+        }
+    }
+
+    /** Сохранённые голоса — для экрана управления базой. */
+    fun savedVoices(): List<String> = voiceProfiles.load().map { it.name }
+
+    fun forgetVoice(name: String) {
+        voiceProfiles.remove(name)
+        _state.update { st ->
+            st.copy(
+                recognizedSpeakers = st.recognizedSpeakers.filterValues { it != name },
+                speakerLabels = st.speakerLabels.filterValues { it != name },
+            )
+        }
+    }
+
     fun renameSpeaker(speakerId: String, label: String) {
         _state.update {
             val labels = it.speakerLabels.toMutableMap()
@@ -211,6 +257,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Сброс на главный экран для новой записи. */
     fun reset() {
         processJob?.cancel()
+        lastEmbeddings = emptyMap()
         _state.update { UiState() }
     }
 

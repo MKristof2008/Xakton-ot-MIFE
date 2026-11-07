@@ -1,6 +1,8 @@
 package ru.hexteam.stenograph.core
 
 import ru.hexteam.stenograph.engine.AsrEngine
+import ru.hexteam.stenograph.engine.SpeakerEmbeddingEngine
+import ru.hexteam.stenograph.engine.VoiceProfileStore
 import ru.hexteam.stenograph.engine.DiarizationEngine
 import ru.hexteam.stenograph.engine.LlmEngine
 
@@ -20,6 +22,13 @@ class Pipeline(
         val json: String,
         val durationMs: Long,
         val processingMs: Long,
+        /**
+         * Отпечатки голосов говорящих: «speaker_1» → вектор.
+         * Нужны, чтобы сохранить голос в базу или сверить со следующей записью.
+         */
+        val voiceEmbeddings: Map<String, FloatArray> = emptyMap(),
+        /** Уверенные совпадения с базой голосов: «speaker_1» → имя. */
+        val recognizedSpeakers: Map<String, String> = emptyMap(),
     ) {
         val rtf: Double
             get() = if (durationMs <= 0L) 0.0 else processingMs.toDouble() / durationMs
@@ -33,6 +42,13 @@ class Pipeline(
         expectedSpeakers: Int? = null,
         useLlm: Boolean = true,
         onStage: (PipelineStage) -> Unit = {},
+        /**
+         * Пайплайн отпечатков голоса. null — голос не определяется
+         * (экономит память на слабых устройствах).
+         */
+        voiceEngine: SpeakerEmbeddingEngine? = null,
+        /** База голосов для узнавания. null — только считать отпечатки. */
+        voiceStore: VoiceProfileStore? = null,
     ): Result {
         val started = System.currentTimeMillis()
 
@@ -55,6 +71,24 @@ class Pipeline(
             diarization.diarize(audioPath, expectedSpeakers)
         } finally {
             diarization.release()
+        }
+
+        // Отпечатки голосов: считаются по тем же сегментам диаризации.
+        // Делаем до слияния, пока модель эмбеддингов ещё загружена.
+        var voiceEmbeddings: Map<String, FloatArray> = emptyMap()
+        var recognized: Map<String, String> = emptyMap()
+        if (voiceEngine != null && speakers.isNotEmpty()) {
+            voiceEmbeddings = runCatching {
+                voiceEngine.embed(audioPath, speakers)
+            }.getOrElse {
+                // Отпечаток — улучшение, а не основа: без него расшифровка
+                // остаётся полной, просто говорящие будут безымянными.
+                emptyMap()
+            }
+            if (voiceStore != null && voiceEmbeddings.isNotEmpty()) {
+                recognized = voiceStore.matchAll(voiceEmbeddings)
+                    .mapValues { it.value.name }
+            }
         }
 
         onStage(PipelineStage.MERGE)
@@ -80,6 +114,8 @@ class Pipeline(
             json = TranscriptJson.toJson(lines),
             durationMs = durationMs,
             processingMs = finished - started,
+            voiceEmbeddings = voiceEmbeddings,
+            recognizedSpeakers = recognized,
         )
     }
 

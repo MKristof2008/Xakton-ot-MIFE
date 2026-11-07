@@ -39,6 +39,17 @@ object EnginesFactory {
         )
     }
 
+    /**
+     * Движок отпечатков голоса. Отдельно от pipeline: он нужен и для
+     * узнавания при обработке, и для записи нового голоса в базу.
+     */
+    fun speakerEmbeddings(context: Context): SpeakerEmbeddingEngine =
+        SpeakerEmbeddingEngine(context)
+
+    /** База сохранённых голосов (filesDir, без сети). */
+    fun voiceProfiles(context: Context): VoiceProfileStore =
+        VoiceProfileStore(context)
+
     /** Отчёт о готовности моделей — для экрана и логов. */
     fun readiness(context: Context): String = buildString {
         val asr = WhisperAsrEngine(context)

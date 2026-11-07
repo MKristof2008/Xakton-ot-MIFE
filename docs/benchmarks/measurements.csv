@@ -10,3 +10,5 @@ asr,whisper-small-q5_1,ggml q5_1,6,no,no,SM-S938B,voxforge-ru-20,203250,129705,0
 asr,whisper-small-q5_1,ggml q5_1,6,no,no,SM-S938B,dialog_2spk,79825,24923,0.312,-,-,-,181,"тот же движок на диалоге 80 с: RTF 0.31"
 pipeline,whisper-small-q5_1+diar+qwen-q4,ggml q5_1+onnx+q4,6,no,yes,SM-S938B,user_voice_54s,54000,39667,0.735,-,-,873,181,"реальная запись пользователя: 10 реплик, без падения по памяти"
 pipeline,whisper-small-q5_1+diar+qwen-q4,ggml q5_1+onnx+q4,6,no,yes,SM-S938B,user_long,159000,93234,0.586,-,-,872,181,"длинная запись: 6 реплик, пик ОЗУ 872 МБ, модели выгружаются между этапами"
+voice,3dspeaker-eres2net,onnx f32,2,no,no,SM-S938B,dialog_2spk-half1-vs-half2,-,-,-,-,0.894;0.920,512,38,"тот же голос: первая половина записи против второй; порог 0.75"
+voice,3dspeaker-eres2net,onnx f32,2,no,no,SM-S938B,dialog_2spk-vs-user_voice,-,-,-,-,0.015;0.162,512,38,"разные люди: ложных узнаваний 0 при пороге 0.75"
