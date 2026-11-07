@@ -68,22 +68,24 @@ int wav_duration_ms(const char *path) {
     return static_cast<int>(dataBytes / 32000.0 * 1000.0);
 }
 
-// Читает WAV 16 кГц / моно / 16 бит в float-буфер для whisper_full.
-// Заголовок фиксированный (44 байта) — такой пишет наш AudioConverter.
-bool read_wav_pcm(const char *path, std::vector<float> &pcm) {
+// Читает WAV 16 кГц / моно / 16 бит в float-буфер для одного окна whisper_full.
+// Окно читается напрямую из файла: весь длинный WAV больше не держится в RAM.
+bool read_wav_pcm_range(const char *path, int startMs, int durationMs, std::vector<float> &pcm) {
     FILE *f = fopen(path, "rb");
     if (!f) return false;
     fseek(f, 0, SEEK_END);
     const long size = ftell(f);
-    fseek(f, 44, SEEK_SET);
     const long dataBytes = size - 44;
-    if (dataBytes <= 0) { fclose(f); return false; }
-
-    std::vector<short> raw(dataBytes / 2);
+    const long startByte = std::max<long>(0, static_cast<long>(startMs * 32.0));
+    const long requested = static_cast<long>(durationMs * 32.0);
+    if (dataBytes <= startByte) { fclose(f); return false; }
+    const long bytes = std::min(requested, dataBytes - startByte);
+    if (bytes <= 0) { fclose(f); return false; }
+    fseek(f, 44 + startByte, SEEK_SET);
+    std::vector<short> raw(static_cast<size_t>(bytes / 2));
     const size_t got = fread(raw.data(), 2, raw.size(), f);
     fclose(f);
     if (got != raw.size()) return false;
-
     pcm.resize(raw.size());
     for (size_t i = 0; i < raw.size(); ++i) pcm[i] = raw[i] / 32768.0f;
     return true;
@@ -138,45 +140,54 @@ Java_ru_hexteam_stenograph_engine_WhisperBridge_nativeTranscribe(
     // Отключаем перенос контекста: меньше зацикливания и галлюцинаций
     params.no_context = true;
 
+    // Длинные записи обрабатываем окнами. Весь WAV не попадает в RAM:
+    // на каждом шаге живёт максимум 30 секунд PCM, после чего vector очищается.
     const int audioMs = wav_duration_ms(path);
+    constexpr int kWindowMs = 30'000;
+    constexpr int kOverlapMs = 1'000;
+    std::vector<std::string> lines;
+    double totalInferMs = 0.0;
+    for (int windowStart = 0; windowStart < audioMs; windowStart += kWindowMs - kOverlapMs) {
+        const int windowMs = std::min(kWindowMs, audioMs - windowStart);
+        std::vector<float> pcm;
+        if (!read_wav_pcm_range(path, windowStart, windowMs, pcm)) {
+            LOGE("не удалось прочитать окно %d-%d мс", windowStart, windowStart + windowMs);
+            continue;
+        }
 
-    std::vector<float> pcm;
-    if (!read_wav_pcm(path, pcm)) {
-        LOGE("не удалось прочитать WAV");
-        env->ReleaseStringUTFChars(wavPath, path);
-        env->ReleaseStringUTFChars(language, lang);
-        return nullptr;
-    }
-    const int rc = [&]() {
         const auto tStart = std::chrono::steady_clock::now();
-        const int r = whisper_full(ctx, params, pcm.data(), static_cast<int>(pcm.size()));
+        const int rc = whisper_full(ctx, params, pcm.data(), static_cast<int>(pcm.size()));
         const auto tEnd = std::chrono::steady_clock::now();
         const double inferMs = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-        const double rtf = audioMs > 0 ? inferMs / audioMs : 0.0;
-        LOGI("инференс: %.0f мс на %d мс аудио, RTF=%.2f", inferMs, audioMs, rtf);
-        return r;
-    }();
+        totalInferMs += inferMs;
+        pcm.clear();
+        pcm.shrink_to_fit();
+        if (rc != 0) {
+            LOGE("whisper_full вернул %d на окне %d-%d", rc, windowStart, windowStart + windowMs);
+            continue;
+        }
+
+        const int n = whisper_full_n_segments(ctx);
+        for (int i = 0; i < n; ++i) {
+            const auto localT0 = whisper_full_get_segment_t0(ctx, i) * 10;
+            const auto localT1 = whisper_full_get_segment_t1(ctx, i) * 10;
+            const auto absoluteT0 = windowStart + localT0;
+            const auto absoluteT1 = windowStart + localT1;
+            if (audioMs > 0 && absoluteT1 > audioMs + kEndToleranceMs) continue;
+            if (absoluteT1 <= absoluteT0) continue;
+
+            std::string text = segment_text(ctx, i);
+            if (text.empty()) continue;
+            lines.push_back(std::to_string(absoluteT0) + "\t" +
+                            std::to_string(absoluteT1) + "\t" + text);
+        }
+    }
 
     env->ReleaseStringUTFChars(wavPath, path);
     env->ReleaseStringUTFChars(language, lang);
 
-    if (rc != 0) {
-        LOGE("whisper_full вернул %d", rc);
-        return nullptr;
-    }
-
-    std::vector<std::string> lines;
-    const int n = whisper_full_n_segments(ctx);
-    for (int i = 0; i < n; ++i) {
-        if (is_hallucination(ctx, i, audioMs)) continue;
-
-        std::string text = segment_text(ctx, i);
-        if (text.empty()) continue;
-
-        const auto t0 = whisper_full_get_segment_t0(ctx, i) * 10;
-        const auto t1 = whisper_full_get_segment_t1(ctx, i) * 10;
-        lines.push_back(std::to_string(t0) + "\t" + std::to_string(t1) + "\t" + text);
-    }
+    const double rtf = audioMs > 0 ? totalInferMs / audioMs : 0.0;
+    LOGI("инференс окнами: %.0f мс на %d мс аудио, RTF=%.2f", totalInferMs, audioMs, rtf);
 
     // Полный текст расшифровки в logcat: после каждой записи текст можно
     // забрать с телефона (adb logcat -s WhisperJNI) для разбора и улучшений.

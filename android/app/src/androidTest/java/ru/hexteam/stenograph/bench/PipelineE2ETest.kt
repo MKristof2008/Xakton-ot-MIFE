@@ -80,6 +80,27 @@ class PipelineE2ETest {
         check(result.lines.isNotEmpty()) { "пустая расшифровка на длинной записи" }
     }
 
+    /**
+     * 10-минутный stress-test: ASR читает окнами и не должен быть убит
+     * Android по памяти. Файл генерируется перед тестом из короткой записи
+     * в assets, поэтому в production APK он не попадает.
+     */
+    @Test
+    fun tenMinuteRecording(): Unit = runBlocking {
+        val target = File(context.cacheDir, "stress_10min.wav")
+        if (!target.isFile || target.length() == 0L) {
+            testContext.assets.open("long_10min.wav").use { input ->
+                target.outputStream().use { out -> input.copyTo(out) }
+            }
+        }
+        val pipeline = EnginesFactory.create(context)
+        val started = System.currentTimeMillis()
+        val result = pipeline.run(target.absolutePath, useLlm = true)
+        val elapsed = System.currentTimeMillis() - started
+        Log.i("E2E", "TEN_MIN реплик=${result.lines.size} время=${elapsed}мс")
+        check(result.lines.isNotEmpty()) { "пустой результат на 10-минутной записи" }
+    }
+
     @Test
     fun fullPipeline(): Unit = runBlocking {
         val modelName = InstrumentationRegistry.getArguments()
