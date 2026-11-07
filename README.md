@@ -42,7 +42,9 @@
 
 ### Готовый APK
 
-**[Скачать app-release.apk](https://github.com/MKristof2008/Xakton-ot-MIFE/raw/feature/ml/artifacts/app-release.apk)** · 704 МБ · Android 8.0+, arm64
+**`artifacts/app-release.apk`** · 704 МБ · Android 8.0+, arm64 · файл лежит в
+этом репозитории (Git LFS). Прямой ссылки на скачивание здесь нет намеренно:
+APK передаётся организаторам и прикладывается к отчёту файлом.
 
 Модели упакованы внутрь: после установки интернет не нужен ни разу.
 Подробная инструкция — `docs/USER_GUIDE.md`.
