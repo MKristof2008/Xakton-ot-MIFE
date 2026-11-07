@@ -28,7 +28,7 @@ class ThresholdSweepTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val testContext = InstrumentationRegistry.getInstrumentation().context
 
-    private val thresholds = listOf(0.30f, 0.40f, 0.45f, 0.50f, 0.55f, 0.60f, 0.70f)
+    private val thresholds = listOf(0.70f, 0.75f, 0.80f, 0.85f, 0.90f, 0.95f)
 
     private fun audio(): File {
         val target = File(context.cacheDir, "bench_input.wav")

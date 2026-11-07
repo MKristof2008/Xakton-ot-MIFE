@@ -17,7 +17,7 @@ import ru.hexteam.stenograph.core.Merge
 import ru.hexteam.stenograph.core.Pipeline
 import ru.hexteam.stenograph.core.PipelineStage
 import ru.hexteam.stenograph.core.TranscriptLine
-import ru.hexteam.stenograph.engine.Stubs
+import ru.hexteam.stenograph.engine.EnginesFactory
 import ru.hexteam.stenograph.export.Export
 import ru.hexteam.stenograph.service.TranscriptionService
 import java.io.File
@@ -45,7 +45,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val error: String? = null,
         val expectedSpeakers: Int? = null,
         val useLlm: Boolean = true,
-        val usingStubs: Boolean = true,
+        val usingStubs: Boolean = false,
         val rtf: Double = 0.0,
         val processingMs: Long = 0L,
         /** Отображаемые имена говорящих. В экспорт идут исходные speaker_N. */
@@ -77,13 +77,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    private val whisperAsr = ru.hexteam.stenograph.engine.WhisperAsrEngine(getApplication())
-
-    private val pipeline = Pipeline(
-        asr = if (whisperAsr.isReady()) whisperAsr else Stubs.StubAsr(),
-        diarization = Stubs.StubDiarization(),
-        llm = Stubs.StubLlm(),
-    )
+    /**
+     * Рабочий пайплайн: все движки настоящие (см. [EnginesFactory]).
+     * Заглушки в интерфейсе не используются намеренно — ТЗ запрещает
+     * подменять работу модели заранее подготовленной расшифровкой.
+     */
+    private val pipeline = EnginesFactory.create(getApplication())
 
     private var processJob: Job? = null
 
@@ -209,7 +208,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Сброс на главный экран для новой записи. */
     fun reset() {
         processJob?.cancel()
-        _state.update { UiState(usingStubs = !whisperAsr.isReady()) }
+        _state.update { UiState(usingStubs = false) }
     }
 
     /** JSON строго по схеме ТЗ. Переименования в экспорт не попадают. */

@@ -16,7 +16,7 @@ import ru.hexteam.stenograph.core.Pipeline
 import ru.hexteam.stenograph.core.PipelineStage
 import ru.hexteam.stenograph.core.TranscriptJson
 import ru.hexteam.stenograph.core.TranscriptLine
-import ru.hexteam.stenograph.engine.Stubs
+import ru.hexteam.stenograph.engine.EnginesFactory
 import java.io.File
 
 /**
@@ -37,7 +37,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val error: String? = null,
         val expectedSpeakers: Int? = null,
         val useLlm: Boolean = true,
-        val usingStubs: Boolean = true,
+        val usingStubs: Boolean = false,
         val rtf: Double = 0.0,
     ) {
         val isBusy: Boolean
@@ -51,13 +51,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    private val whisperAsr = ru.hexteam.stenograph.engine.WhisperAsrEngine(getApplication())
-
-    private val pipeline = Pipeline(
-        asr = if (whisperAsr.isReady()) whisperAsr else Stubs.StubAsr(),
-        diarization = Stubs.StubDiarization(),
-        llm = Stubs.StubLlm(),
-    )
+    /**
+     * Рабочий пайплайн: все движки настоящие (см. [EnginesFactory]).
+     * Заглушки не используются — ТЗ запрещает подменять работу модели.
+     */
+    private val pipeline = EnginesFactory.create(getApplication())
 
     fun onAudioPicked(uri: Uri, displayName: String) {
         _state.update {
@@ -115,7 +113,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun reset() {
-        _state.update { UiState(usingStubs = !whisperAsr.isReady()) }
+        _state.update { UiState(usingStubs = false) }
     }
 
     /** Копирует выбранный файл во внутреннее хранилище: движки работают с путём, не с Uri. */
