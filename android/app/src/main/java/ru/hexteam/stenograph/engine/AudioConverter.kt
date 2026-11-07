@@ -112,7 +112,10 @@ object AudioConverter {
 
         val mono = downmix(pcm.copyOf(pcmLen), channels)
         val resampled = resample(mono, sourceRate, TARGET_RATE)
-        writeWav(resampled, File(context.cacheDir, "input16k.wav"))
+        // Предобработка остаётся локальной и не меняет длину/таймкоды записи.
+        // Если запись чистая, защитный floor оставляет спектр почти без изменений.
+        val denoised = NoiseReducer.reduce(resampled, TARGET_RATE)
+        writeWav(denoised, File(context.cacheDir, "input16k.wav"))
         File(context.cacheDir, "input16k.wav")
     } catch (e: Exception) {
         null
