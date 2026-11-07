@@ -64,6 +64,15 @@ class TranscriptPipeline(private val context: Context) {
 
         /** Пауза внутри речи одного человека, до которой куски склеиваются (мс). */
         private const val JOIN_GAP_MS = 700
+
+        /** Минимальная длина фрагмента для распознавания: 0.5 с при 16 кГц. */
+        private const val MIN_UTTERANCE_SAMPLES = 8_000
+
+        /**
+         * Ниже этой длины звука (мс) короткий текст почти всегда выдуман моделью:
+         * настоящая реплика из одного-двух слов звучит не меньше 300 мс.
+         */
+        private const val SUSPICIOUS_MS = 400
     }
 
     private val weights = mapOf(
@@ -141,10 +150,14 @@ class TranscriptPipeline(private val context: Context) {
             for ((idx, u) in utterances.withIndex()) {
                 checkCancel()
                 val slice = slicePcm(pcm.samples, u.startMs, u.endMs)
-                // Слишком короткие фрагменты (шум, вдох) не распознаём — на них
-                // модель только галлюцинирует.
-                if (slice.size < 4_000) continue
-                val segs = engine.transcribe(slice)
+                // Короткие фрагменты (вдох, скрип, обрывок слога) не распознаём:
+                // на них Whisper выдаёт выдуманный текст («Мника», «ПОСИЗА»),
+                // который потом неотличим от настоящей короткой реплики.
+                if (slice.size < MIN_UTTERANCE_SAMPLES) continue
+                val segs = engine.transcribe(slice).filter { seg ->
+                    // Отдельно отсекаем короткий выдуманный текст внутри длинного куска.
+                    !isLikelyHallucination(seg.text, seg.endMs - seg.startMs)
+                }
                 if (segs.isNotEmpty()) {
                     val shifted = segs.map { s ->
                         s.copy(startMs = s.startMs + u.startMs, endMs = s.endMs + u.startMs)
@@ -193,6 +206,21 @@ class TranscriptPipeline(private val context: Context) {
             stagesMs = stagesMs,
             speakerCount = replicas.map { it.speakerId }.distinct().size,
         )
+    }
+
+    /**
+     * Признак галлюцинации Whisper на коротком звуке. Модель обучена выдавать
+     * «что-то» даже из шума, поэтому из 100–300 мс тишины появляются странные
+     * слова. Порог сознательно мягкий: настоящая короткая реплика («Да», «Нет»,
+     * «Хорошо») тоже занимает мало времени, и резать её нельзя.
+     */
+    private fun isLikelyHallucination(text: String, durationMs: Int): Boolean {
+        val words = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (words.isEmpty()) return true
+        // Слишком длинное «слово» на очень коротком звуке — склейка случайных
+        // токенов, речи такой длительности там физически не помещается.
+        return durationMs < SUSPICIOUS_MS &&
+            words.any { it.trim('.', ',', '!', '?', '-').length > 12 }
     }
 
     /** Вырезает отрезок PCM по миллисекундам с проверкой границ. */
