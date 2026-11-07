@@ -12,3 +12,6 @@ pipeline,whisper-small-q5_1+diar+qwen-q4,ggml q5_1+onnx+q4,6,no,yes,SM-S938B,use
 pipeline,whisper-small-q5_1+diar+qwen-q4,ggml q5_1+onnx+q4,6,no,yes,SM-S938B,user_long,159000,93234,0.586,-,-,872,181,"длинная запись: 6 реплик, пик ОЗУ 872 МБ, модели выгружаются между этапами"
 voice,3dspeaker-eres2net,onnx f32,2,no,no,SM-S938B,dialog_2spk-half1-vs-half2,-,-,-,-,0.894;0.920,512,38,"тот же голос: первая половина записи против второй; порог 0.75"
 voice,3dspeaker-eres2net,onnx f32,2,no,no,SM-S938B,dialog_2spk-vs-user_voice,-,-,-,-,0.015;0.162,512,38,"разные люди: ложных узнаваний 0 при пороге 0.75"
+llm,qwen2.5-1.5b-instruct,q4_k_m,6,no,yes,PC,dialog_2spk-no-llm,-,-,-,0.1443,-,-,1000,"A/B на ПК: ASR без LLM, базовая линия"
+llm,qwen2.5-1.5b-instruct,q4_k_m,6,no,yes,PC,dialog_2spk-full-edit,-,-,-,0.1546,-,-,1000,"A/B на ПК: полная правка слов моделью — WER УХУДШИЛСЯ на +0.010, режим отклонён"
+llm,qwen2.5-1.5b-instruct,q4_k_m,6,no,yes,PC,dialog_2spk-punct-only,-,-,-,0.1443,-,-,1000,"A/B на ПК: только пунктуация и регистр — WER не меняется, режим выбран"

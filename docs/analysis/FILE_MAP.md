@@ -32,7 +32,7 @@
 
 | Файл | Строит |
 |---|---|
-| `tools/make_ml_charts.py` | `docs/img/wer_models.png`, `wer_llm_ab.png`, `rtf.png` |
+| `tools/make_bench_charts.py` | `docs/img/bench_wer.png`, `bench_rtf.png`, `bench_pareto.png`, `bench_der.png`, `bench_llm_role.png`, `bench_llm_size.png` — из `docs/benchmarks/measurements.csv` |
 | `tools/make_run_charts.py` | `docs/img/runs_rtf.png` из таблицы `docs/runs/README.md` |
 | `tools/make_error_charts.py` | `docs/img/errors_by_type.png`, `errors_status.png` из реестра |
 
