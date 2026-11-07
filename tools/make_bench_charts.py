@@ -24,6 +24,22 @@ CSV_PATH = ROOT / "docs" / "benchmarks" / "measurements.csv"
 IMG_DIR = ROOT / "docs" / "img"
 
 
+def label(row: dict) -> str:
+    """Подпись конфигурации для графика.
+
+    Колонка config — это класс замера (asr/diarization/llm), одинаковая
+    у всех строк, поэтому на графике подписываемся моделью и уточнением:
+    без этого все точки Парето были подписаны «asr».
+    """
+    parts = [row.get("config", ""), row.get("model", "")]
+    note = (row.get("notes") or "").lower()
+    if "выбрана" in note:
+        parts.append("★")
+    if row.get("file") and row["file"] != "voxforge-ru-20":
+        parts.append(f"[{row['file']}]")
+    return " ".join(p for p in parts if p)
+
+
 def load_rows(path: Path) -> list[dict]:
     with open(path, encoding="utf-8") as f:
         rows = [r for r in csv.DictReader(f) if any((v or "").strip() for v in r.values())]
@@ -38,7 +54,7 @@ def fnum(v):
 
 
 def chart_bars(rows, key, title, ylabel, out, ref_line=None, ref_label=None):
-    pts = [(r["config"], fnum(r[key])) for r in rows]
+    pts = [(label(r), fnum(r[key])) for r in rows]
     pts = [(c, v) for c, v in pts if v is not None]
     if not pts:
         print(f"нет данных для {out}")
@@ -64,7 +80,7 @@ def chart_bars(rows, key, title, ylabel, out, ref_line=None, ref_label=None):
 
 def chart_pareto(rows, out):
     pts = [
-        (r["config"], fnum(r["wer"]), fnum(r["rtf"]))
+        (label(r), fnum(r["wer"]), fnum(r["rtf"]))
         for r in rows
         if fnum(r["wer"]) is not None and fnum(r["rtf"]) is not None
     ]
