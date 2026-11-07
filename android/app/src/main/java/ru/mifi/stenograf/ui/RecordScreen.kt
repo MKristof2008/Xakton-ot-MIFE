@@ -71,6 +71,10 @@ fun RecordScreen(
     var level by remember { mutableStateOf(0f) }
     var error by remember { mutableStateOf<String?>(null) }
     var recordFile by remember { mutableStateOf<java.io.File?>(null) }
+    // Сколько человек будет говорить. null = определить автоматически.
+    // Раньше здесь жёстко стоял 1, из-за чего диаризация не могла разделить
+    // голоса даже когда в записи их было двое.
+    var speakers by remember { mutableStateOf<Int?>(1) }
 
     val recorder = remember { VoiceRecorder(context) }
     val recordScope = rememberCoroutineScope()
@@ -144,7 +148,7 @@ fun RecordScreen(
                             withTimeoutOrNull(3000) { recorder.awaitFinished() }
                             val ready = java.io.File(context.filesDir, "latest_voice.wav")
                             runCatching { file.copyTo(ready, overwrite = true) }
-                                .onSuccess { onRecorded(ready, 1) }
+                                .onSuccess { onRecorded(ready, speakers) }
                                 .onFailure { error = "Не удалось сохранить запись: ${it.message}" }
                         }
                     }
@@ -173,7 +177,14 @@ fun RecordScreen(
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
 
-        Spacer(Modifier.height(36.dp))
+        Spacer(Modifier.height(24.dp))
+        SpeakersPickerSimple(
+            selected = speakers,
+            enabled = !recording,
+            onSelect = { speakers = it },
+        )
+
+        Spacer(Modifier.height(24.dp))
         OutlinedButton(
             onClick = { state.backToImport() },
             modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -230,5 +241,64 @@ private fun RecordButton(recording: Boolean, level: Float, onClick: () -> Unit) 
                 Icon(Icons.Filled.Mic, contentDescription = "Записать", modifier = Modifier.size(48.dp))
             }
         }
+    }
+}
+
+/**
+ * Выбор числа говорящих на экране записи: «Один» / «Несколько (авто)».
+ * Для живой записи с микрофона чаще всего один человек — это и есть дефолт,
+ * но переключатель даёт диаризации шанс разделить нескольких.
+ */
+@Composable
+private fun SpeakersPickerSimple(
+    selected: Int?,
+    enabled: Boolean,
+    onSelect: (Int?) -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            "Кто говорит в записи",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChoicePill(
+                text = "Один",
+                selected = selected == 1,
+                enabled = enabled,
+                onClick = { onSelect(1) },
+            )
+            ChoicePill(
+                text = "Несколько",
+                selected = selected == null,
+                enabled = enabled,
+                onClick = { onSelect(null) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChoicePill(
+    text: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val bg = if (selected) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.surfaceVariant
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (enabled) bg else bg.copy(alpha = 0.4f))
+            .then(if (enabled) Modifier.clickableNoRipple(onClick) else Modifier)
+            .padding(horizontal = 20.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = MaterialTheme.typography.labelMedium, color = fg)
     }
 }

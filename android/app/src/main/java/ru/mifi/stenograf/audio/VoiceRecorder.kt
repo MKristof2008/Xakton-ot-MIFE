@@ -62,7 +62,11 @@ class VoiceRecorder(private val context: Context) {
             val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL, ENCODING)
             val bufSize = maxOf(minBuf, SAMPLE_RATE / 2 * 2) // ~0.5 c запасом
             val recorder = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                // MIC, а не VOICE_RECOGNITION: VOICE_RECOGNITION включает
+                // агрессивное шумоподавление и подавление эха — для одного
+                // говорящего хорошо, но второй голос в комнате он вырезает,
+                // и диаризации нечего разделять. MIC пишет оба голоса.
+                MediaRecorder.AudioSource.MIC,
                 SAMPLE_RATE,
                 CHANNEL,
                 ENCODING,
