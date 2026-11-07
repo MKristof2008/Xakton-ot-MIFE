@@ -59,6 +59,7 @@ fun ImportScreen(
     onRecord: () -> Unit = {},
     onHistory: () -> Unit = {},
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var speakersAuto by remember { mutableStateOf(true) }
     var speakersCount by remember { mutableStateOf(2) }
 
@@ -86,11 +87,15 @@ fun ImportScreen(
         Spacer(Modifier.height(4.dp))
 
         ImportCard(
-            onPick = { picker.launch(arrayOf("audio/*", "video/*")) },
+            onPick = {
+                Haptics.confirm(context)
+                picker.launch(arrayOf("audio/*", "video/*"))
+            },
             onRecord = onRecord,
         )
 
         SpeakersCard(
+            context = context,
             auto = speakersAuto,
             count = speakersCount,
             onAutoChange = { speakersAuto = it },
@@ -100,7 +105,10 @@ fun ImportScreen(
         ModelsCard(state)
 
         OutlinedButton(
-            onClick = onHistory,
+            onClick = {
+                Haptics.tap(context)
+                onHistory()
+            },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(14.dp),
         ) {
@@ -220,6 +228,7 @@ private fun ImportCard(onPick: () -> Unit, onRecord: () -> Unit) {
 
 @Composable
 private fun SpeakersCard(
+    context: android.content.Context,
     auto: Boolean,
     count: Int,
     onAutoChange: (Boolean) -> Unit,
@@ -233,8 +242,12 @@ private fun SpeakersCard(
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Сколько человек в записи", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoiceChip("Определить", auto) { onAutoChange(true) }
-                ChoiceChip("Известно", !auto) { onAutoChange(false) }
+                ChoiceChip("Определить", auto) {
+                    Haptics.tap(context); onAutoChange(true)
+                }
+                ChoiceChip("Известно", !auto) {
+                    Haptics.tap(context); onAutoChange(false)
+                }
             }
             if (!auto) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -247,7 +260,9 @@ private fun SpeakersCard(
                                     if (count == n) speakerColor("speaker_$n")
                                     else MaterialTheme.colorScheme.surfaceVariant,
                                 )
-                                .clickableNoRipple { onCountChange(n) },
+                                .clickableNoRipple {
+                                    Haptics.tap(context); onCountChange(n)
+                                },
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(

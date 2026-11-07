@@ -97,8 +97,15 @@ private val AppTypography = Typography(
     labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp),
 )
 
+/**
+ * Тема принудительно тёмная.
+ *
+ * Раньше бралась системная, но фон приложения всегда тёмный (живой градиент).
+ * На телефоне со светлой системной темой это давало чёрный текст на тёмном
+ * фоне — читать невозможно. Пока фон не умеет быть светлым, тема одна.
+ */
 @Composable
-fun StenografTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun StenografTheme(dark: Boolean = true, content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = if (dark) Dark else Light,
         typography = AppTypography,

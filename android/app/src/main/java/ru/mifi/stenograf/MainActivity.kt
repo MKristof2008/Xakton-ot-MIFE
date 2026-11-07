@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -39,9 +41,27 @@ class MainActivity : ComponentActivity() {
         if (debugUri != null && autorun) Log.i("Stenograf", "authorun: uri=$debugUri speakers=$debugSpeakers")
         setContent {
             StenografTheme {
-                Scaffold { padding ->
-                    Box(Modifier.fillMaxSize().padding(padding)) {
-                        App(autorunUri = if (autorun) debugUri else null, autorunSpeakers = debugSpeakers)
+                // Фон рисуем ПЕРВЫМ слоем во весь экран, поверх него — контент.
+                // Раньше AuroraBackground оборачивал App() внутри Scaffold,
+                // и её перекрывал непрозрачный фон контейнера — пятна не были видны.
+                ru.mifi.stenograf.ui.AuroraBackground {
+                    Scaffold(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    ) { padding ->
+                        Box(Modifier.fillMaxSize().padding(padding)) {
+                            // Scaffold с прозрачным фоном не выставляет цвет контента,
+                            // и Text по умолчанию рисовался ЧЁРНЫМ на тёмном фоне.
+                            // Задаём цвет явно для всего поддерева.
+                            androidx.compose.runtime.CompositionLocalProvider(
+                                androidx.compose.material3.LocalContentColor provides
+                                    MaterialTheme.colorScheme.onBackground,
+                            ) {
+                                App(
+                                    autorunUri = if (autorun) debugUri else null,
+                                    autorunSpeakers = debugSpeakers,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -84,7 +104,18 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
         }
     }
 
-    when (state.screen) {
+    // Переход между экранами: лёгкий fade + подъём. Без него экраны
+    // «перескакивают», и демо выглядит дёргано.
+    androidx.compose.animation.AnimatedContent(
+        targetState = state.screen,
+        transitionSpec = {
+            (androidx.compose.animation.fadeIn(tween(260)) +
+                androidx.compose.animation.slideInVertically(tween(260)) { it / 14 }) togetherWith
+                androidx.compose.animation.fadeOut(tween(160))
+        },
+        label = "screen",
+    ) { screen ->
+    when (screen) {
         Screen.IMPORT -> ImportScreen(
             state = state,
             onPickFile = { uri: Uri, name: String, speakers: Int? -> state.start(uri, name, speakers) },
@@ -110,5 +141,6 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
                 )
             }
         }
+    }
     }
 }

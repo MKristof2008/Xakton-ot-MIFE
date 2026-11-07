@@ -44,6 +44,10 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,6 +74,8 @@ fun ResultScreen(
 ) {
     val result = state.result ?: return
     var showTimecodes by remember { mutableStateOf(true) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(result) { Haptics.success(context) }
 
     // Плеер: живой, если у результата есть файл аудио (запись или история).
     val playback = remember { AudioPlayback() }
@@ -133,6 +139,18 @@ fun ResultScreen(
                 }
             }
             itemsIndexed(result.replicas, key = { _, r -> "${r.startMs}-${r.speakerId}" }) { index, rep ->
+                // Каскад: каждая реплика появляется с задержкой по индексу.
+                // На демо это читается как «система думает и выдаёт результат».
+                var visible by remember { mutableStateOf(false) }
+                LaunchedEffect(rep.startMs) {
+                    kotlinx.coroutines.delay((index.coerceAtMost(12)) * 55L)
+                    visible = true
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = visible,
+                    enter = androidx.compose.animation.fadeIn(tween(220)) +
+                        androidx.compose.animation.slideInHorizontally(tween(220)) { it / 6 },
+                ) {
                 ReplicaRow(
                     rep = rep,
                     showTimecodes = showTimecodes,
@@ -143,6 +161,7 @@ fun ResultScreen(
                         null
                     },
                 )
+                }
             }
         }
 

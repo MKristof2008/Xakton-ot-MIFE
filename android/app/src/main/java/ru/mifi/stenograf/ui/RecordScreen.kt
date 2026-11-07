@@ -136,6 +136,7 @@ fun RecordScreen(
             recording = recording,
             level = level,
             onClick = {
+                Haptics.confirm(context)
                 if (recording) {
                     // Файл читаем ПОСЛЕ того, как корутина записи завершится:
                     // заголовок WAV дописывается только в самом конце, а пока
@@ -186,7 +187,10 @@ fun RecordScreen(
 
         Spacer(Modifier.height(24.dp))
         OutlinedButton(
-            onClick = { state.backToImport() },
+            onClick = {
+                Haptics.tap(context)
+                state.backToImport()
+            },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(14.dp),
         ) { Text("Назад") }

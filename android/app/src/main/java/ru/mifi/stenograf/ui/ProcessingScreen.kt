@@ -46,6 +46,7 @@ import ru.mifi.stenograf.pipeline.Stage
  */
 @Composable
 fun ProcessingScreen(state: AppState) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val p = state.progress
     val animated by animateFloatAsState(
         targetValue = p.overallFraction.coerceIn(0f, 1f),
@@ -91,12 +92,11 @@ fun ProcessingScreen(state: AppState) {
             )
         }
 
-        WaveBars(
+        WaveBarsGradient(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp),
-            barCount = 15,
-            color = MaterialTheme.colorScheme.secondary,
+                .height(48.dp),
+            barCount = 26,
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -107,7 +107,10 @@ fun ProcessingScreen(state: AppState) {
 
         Spacer(Modifier.weight(1f))
         OutlinedButton(
-            onClick = { state.cancel() },
+            onClick = {
+                Haptics.warn(context)
+                state.cancel()
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),

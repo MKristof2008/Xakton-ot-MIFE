@@ -111,3 +111,71 @@ fun PulseDots(color: Color, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * Счётчик, который «набегает» до значения. Цифры, которые дёргаются,
+ * читаются как живой процесс, а не как статичный вывод.
+ */
+@Composable
+fun AnimatedCount(
+    target: Int,
+    modifier: Modifier = Modifier,
+    durationMs: Int = 900,
+    style: androidx.compose.ui.text.TextStyle = androidx.compose.material3.MaterialTheme.typography.displaySmall,
+    color: Color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground,
+) {
+    val value by androidx.compose.animation.core.animateIntAsState(
+        targetValue = target,
+        animationSpec = androidx.compose.animation.core.tween(durationMs),
+        label = "count",
+    )
+    androidx.compose.material3.Text(
+        text = "$value",
+        modifier = modifier,
+        style = style,
+        color = color,
+    )
+}
+
+/**
+ * Волна, которая «пробегает» по полосе — индикатор активной работы.
+ * В отличие от [WaveBars], амплитуда затухает к краям: выглядит как
+ * настоящий эквалайзер, а не как набор столбиков.
+ */
+@Composable
+fun WaveBarsGradient(
+    modifier: Modifier = Modifier,
+    barCount: Int = 24,
+    colors: List<Color> = listOf(Color(0xFF4C7DFF), Color(0xFF38E1C4)),
+) {
+    val transition = rememberInfiniteTransition(label = "waveg")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing)),
+        label = "phaseg",
+    )
+    Canvas(modifier = modifier) {
+        val gap = size.width / (barCount * 1.8f)
+        val barW = gap * 0.8f
+        val cy = size.height / 2f
+        for (i in 0 until barCount) {
+            val edge = 1f - kotlin.math.abs(i - (barCount - 1) / 2f) / (barCount / 2f)
+            val s = sin(phase + i * 0.55f) * 0.5f + sin(phase * 0.7f + i * 1.1f) * 0.5f
+            val h = (0.12f + kotlin.math.abs(s) * 0.88f) * size.height * (0.35f + edge * 0.65f)
+            val x = i * gap * 1.8f + gap
+            val frac = i.toFloat() / barCount
+            val c = androidx.compose.ui.graphics.lerp(
+                colors[0],
+                colors[1],
+                frac,
+            )
+            drawRoundRect(
+                color = c.copy(alpha = 0.85f),
+                topLeft = Offset(x, cy - h / 2f),
+                size = Size(barW, h),
+                cornerRadius = CornerRadius(barW / 2f, barW / 2f),
+            )
+        }
+    }
+}
