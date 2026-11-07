@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Нейро-стенографист · Hex.Team</title>
+<style>
+  :root{
+    --bg:#0B0E14; --surface:#141A24; --surface2:#1C2430; --outline:#26303F;
+    --text:#E8EDF5; --text2:#C3CBD9; --muted:#8B98AC; --dim:#5A6779;
+    --primary:#6C8EFF; --secondary:#A78BFA; --tertiary:#34D399;
+    --amber:#F59E0B; --pink:#F472B6; --cyan:#22D3EE;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Inter,Roboto,system-ui,sans-serif;overflow:hidden;}
+  .slide{width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:6vh 7vw;position:relative;display:none;}
+  .slide.active{display:flex;}
+  h1{font-size:3.2rem;font-weight:700;letter-spacing:.01em;margin-bottom:1.2rem;text-align:center;line-height:1.15;}
+  h2{font-size:1.5rem;font-weight:500;color:var(--primary);margin-bottom:2rem;text-align:center;}
+  p,li{font-size:1.25rem;line-height:1.55;color:var(--text2);}
+  .accent{color:var(--primary);} .acc2{color:var(--secondary);} .ok{color:var(--tertiary);}
+  .warn{color:var(--amber);} .muted{color:var(--muted);} .dim{color:var(--dim);}
+  .mono{font-family:Consolas,'JetBrains Mono',monospace;}
+  .footer{position:absolute;bottom:3vh;left:7vw;right:7vw;display:flex;justify-content:space-between;font-size:.8rem;color:var(--dim);}
+  /* hexagon */
+  .hex{width:130px;height:150px;background:transparent;position:relative;display:flex;align-items:center;justify-content:center;
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    background:linear-gradient(160deg,var(--surface),var(--surface2));
+    border:none;font-size:3.2rem;}
+  .hex-ring{position:absolute;inset:6px;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    background:transparent;box-shadow:inset 0 0 0 2px var(--primary);}
+  .orbit{width:340px;height:340px;border:1.5px solid var(--outline);border-radius:50%;position:absolute;
+    display:flex;align-items:center;justify-content:center;}
+  .orbit .dot{position:absolute;width:14px;height:14px;border-radius:50%;}
+  .orbit .d1{background:var(--primary);top:-7px;left:50%;transform:translateX(-50%);}
+  .orbit .d2{background:var(--secondary);bottom:18%;right:4%;}
+  .orbit .d3{background:var(--tertiary);bottom:18%;left:4%;}
+  .hero{position:relative;width:340px;height:340px;display:flex;align-items:center;justify-content:center;margin-bottom:3rem;}
+  /* lists */
+  ul{list-style:none;max-width:820px;width:100%;}
+  ul li{margin:1.1rem 0;padding-left:.4rem;font-size:1.35rem;}
+  ul li .ic{margin-right:.8rem;}
+  /* cards */
+  .cards{display:flex;gap:1.4rem;flex-wrap:wrap;justify-content:center;max-width:1100px;}
+  .card{background:var(--surface);border:1px solid var(--outline);border-radius:18px;padding:1.6rem 1.8rem;min-width:210px;flex:1;}
+  .card h3{font-size:1.25rem;margin-bottom:.5rem;}
+  .stripe{height:4px;border-radius:2px;margin:-1.6rem -1.8rem 1.2rem;}
+  /* pipeline */
+  .pipe{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;justify-content:center;max-width:1100px;margin:2rem 0;}
+  .node{width:110px;height:126px;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:.85rem;font-weight:600;text-align:center;padding:0 .7rem;box-shadow:inset 0 0 0 2px var(--outline);}
+  .node.blue{box-shadow:inset 0 0 0 2px var(--primary);color:var(--primary);}
+  .node.green{box-shadow:inset 0 0 0 2px var(--tertiary);color:var(--tertiary);}
+  .node.purple{box-shadow:inset 0 0 0 2px var(--secondary);color:var(--secondary);}
+  .node.plain{box-shadow:inset 0 0 0 2px var(--outline);color:var(--text);}
+  .arrow{color:var(--outline);font-size:1.6rem;font-weight:700;}
+  /* big numbers */
+  .bignum{font-size:4.6rem;font-weight:800;letter-spacing:-.01em;}
+  .numrow{display:flex;gap:4rem;justify-content:center;margin:2.5rem 0;flex-wrap:wrap;}
+  .numbox{text-align:center;}
+  .numbox .lbl{font-size:1rem;color:var(--muted);margin-top:.4rem;}
+  /* table */
+  table{border-collapse:collapse;background:var(--surface);border:1px solid var(--outline);border-radius:14px;overflow:hidden;max-width:900px;width:100%;}
+  th,td{border:1px solid var(--outline);padding:.7rem 1.1rem;font-size:1.05rem;text-align:left;}
+  th{color:var(--muted);font-weight:600;background:var(--surface2);}
+  td .mono{color:var(--tertiary);}
+  /* badge */
+  .badge{display:inline-block;background:rgba(52,211,153,.12);border:1px solid var(--tertiary);color:var(--tertiary);
+    border-radius:999px;padding:.55rem 1.4rem;font-size:1.15rem;font-weight:600;margin-top:2rem;}
+  .pill{display:inline-block;background:rgba(108,142,255,.14);border:1px solid var(--primary);color:var(--primary);
+    border-radius:999px;padding:.3rem 1rem;font-size:.9rem;font-weight:600;}
+  /* transcript sample */
+  .bubble{max-width:760px;width:100%;background:var(--surface);border-radius:16px;padding:1.1rem 1.3rem;margin:.6rem 0;display:flex;gap:1rem;align-items:flex-start;}
+  .av{width:40px;height:44px;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;flex-shrink:0;}
+  .av1{background:rgba(108,142,255,.2);color:var(--primary);}
+  .av2{background:rgba(52,211,153,.2);color:var(--tertiary);}
+  .who{font-weight:600;font-size:.95rem;}
+  .w1{color:var(--primary);} .w2{color:var(--tertiary);}
+  .tc{font-family:Consolas,monospace;font-size:.85rem;color:var(--dim);margin-left:.6rem;}
+  /* nav */
+  .nav{position:fixed;bottom:2.2vh;left:50%;transform:translateX(-50%);display:flex;gap:.8rem;z-index:50;}
+  .nav button{background:var(--surface2);color:var(--text2);border:1px solid var(--outline);border-radius:12px;
+    padding:.55rem 1.2rem;font-size:1rem;cursor:pointer;}
+  .nav button:hover{border-color:var(--primary);color:var(--primary);}
+  .num{position:absolute;top:3.5vh;right:4vw;color:var(--dim);font-size:.85rem;font-family:Consolas,monospace;}
+  .crumbs{position:absolute;top:3.5vh;left:4vw;display:flex;gap:.45rem;}
+  .crumb{width:14px;height:16px;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);background:var(--outline);}
+  .crumb.on{background:var(--primary);}
+  .timeline{display:flex;flex-direction:column;gap:.9rem;max-width:900px;width:100%;margin-top:1rem;}
+  .tlrow{display:flex;align-items:center;gap:1.2rem;}
+  .tlhex{width:52px;height:60px;flex-shrink:0;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:700;}
+  .done{background:var(--tertiary);color:#0B0E14;}
+  .tltext{font-size:1.15rem;color:var(--text2);}
+  .tltext b{color:var(--text);}
+</style>
+</head>
+<body>
+
+<!-- 1. ТИТУЛ -->
+<section class="slide active" id="s1">
+  <div class="hero">
+    <div class="orbit"><span class="dot d1"></span><span class="dot d2"></span><span class="dot d3"></span></div>
+    <div class="hex"><div class="hex-ring"></div>🎙️</div>
+  </div>
+  <h1>Нейро-стенографист</h1>
+  <h2>Аудио → текст. Локально. <span class="ok">Офлайн.</span></h2>
+  <p class="muted mono">Hex.Team · Nuclear IT Hack 2026</p>
+</section>
+
+<!-- 2. ПРОБЛЕМА -->
+<section class="slide" id="s2">
+  <div class="crumbs"><span class="crumb on"></span><span class="crumb"></span><span class="crumb"></span><span class="crumb"></span></div>
+  <h1>Совещание закончилось.<br>А протокол — нет.</h1>
+  <ul>
+    <li><span class="ic">🔒</span>Аудио <b>нельзя</b> отправлять в облако — коммерческая тайна</li>
+    <li><span class="ic">📵</span>Проверка — в <b>режиме полёта</b>: интернета нет</li>
+    <li><span class="ic">📋</span>На выходе — строгий JSON: кто, когда и что сказал</li>
+  </ul>
+  <div class="badge">Офлайн гарантирован технически, а не обещанием</div>
+</section>
+
+<!-- 3. РЕШЕНИЕ -->
+<section class="slide" id="s3">
+  <div class="crumbs"><span class="crumb on"></span><span class="crumb on"></span><span class="crumb"></span><span class="crumb"></span></div>
+  <h1>Всё считается на телефоне</h1>
+  <div class="pipe">
+    <div class="node blue">⬡<br>ASR<br><small style="color:var(--muted)">Whisper</small></div>
+    <span class="arrow">→</span>
+    <div class="node green">⬡<br>Диаризация<br><small style="color:var(--muted)">sherpa-onnx</small></div>
+    <span class="arrow">→</span>
+    <div class="node plain">⬡<br>Сшивка<br><small style="color:var(--muted)">метки</small></div>
+    <span class="arrow">→</span>
+    <div class="node purple">⬡<br>LLM<br><small style="color:var(--muted)">llama.cpp</small></div>
+    <span class="arrow">→</span>
+    <div class="node plain">⬡<br>JSON</div>
+  </div>
+  <div class="numrow">
+    <div class="numbox"><div class="bignum accent">0</div><div class="lbl">разрешений INTERNET</div></div>
+    <div class="numbox"><div class="bignum ok">0</div><div class="lbl">байтов уходит в сеть</div></div>
+  </div>
+</section>
+
+<!-- 4. ДЕМО -->
+<section class="slide" id="s4">
+  <div class="crumbs"><span class="crumb on"></span><span class="crumb on"></span><span class="crumb on"></span><span class="crumb"></span></div>
+  <h1>Результат — как в приложении</h1>
+  <div class="bubble">
+    <div class="av av1">1</div>
+    <div><span class="who w1">speaker_1</span><span class="tc">[00:01]</span>
+    <p style="margin-top:.3rem">Добрый день! Начнём совещание по проекту.</p></div>
+  </div>
+  <div class="bubble">
+    <div class="av av2">2</div>
+    <div><span class="who w2">speaker_2</span><span class="tc">[00:05]</span>
+    <p style="margin-top:.3rem">Добрый день. Предлагаю начать со статуса по задачам.</p></div>
+  </div>
+  <p class="muted" style="margin-top:1.2rem">✈️ Запись обработана в авиарежиме — никуда не уходит</p>
+</section>
+
+<!-- 5. КАК СТРОИЛИ -->
+<section class="slide" id="s5">
+  <h1>Строили так же, как работает приложение</h1>
+  <div class="timeline">
+    <div class="tlrow"><div class="tlhex done">✓</div><div class="tltext"><b>Контракты движков</b> — первым днём, работа в параллель без конфликтов</div></div>
+    <div class="tlrow"><div class="tlhex done">✓</div><div class="tltext"><b>ASR</b> — отбор моделей по измеренному WER</div></div>
+    <div class="tlrow"><div class="tlhex done">✓</div><div class="tltext"><b>Диаризация</b> — порт на Android через sherpa-onnx</div></div>
+    <div class="tlrow"><div class="tlhex done">✓</div><div class="tltext"><b>Сшивка + LLM</b> — метки, пунктуация, протокол совещания</div></div>
+    <div class="tlrow"><div class="tlhex done">✓</div><div class="tltext"><b>Тесты</b> — 38 автотестов, проверка офлайна</div></div>
+    <div class="tlrow"><div class="tlhex done">✓</div><div class="tltext"><b>UI и экспорт</b> — Compose, JSON/TXT/SRT, release без INTERNET</div></div>
+  </div>
+</section>
+
+<!-- 6. ЦИФРЫ -->
+<section class="slide" id="s6">
+  <h1>Измерено. Не обещано.</h1>
+  <div class="numrow">
+    <div class="numbox"><div class="bignum accent">0.161</div><div class="lbl">WER — ошибка распознавания</div></div>
+    <div class="numbox"><div class="bignum acc2">0.81</div><div class="lbl">RTF — скорость обработки</div></div>
+    <div class="numbox"><div class="bignum ok">38</div><div class="lbl">автотестов</div></div>
+  </div>
+  <table>
+    <tr><th>Модель</th><th>WER</th><th>Решение</th></tr>
+    <tr><td>Whisper tiny</td><td class="mono" style="color:var(--dim)">0.345</td><td class="dim">отклонена ⏳</td></tr>
+    <tr><td>Whisper base</td><td class="mono">0.161</td><td class="ok">в продакшен ✓</td></tr>
+  </table>
+</section>
+
+<!-- 7. КОМАНДА -->
+<section class="slide" id="s7">
+  <h1>4 говорящих — 0 путаницы</h1>
+  <h2 class="muted" style="color:var(--muted)">наша «диаризация» команды</h2>
+  <div class="cards">
+    <div class="card"><div class="stripe" style="background:var(--primary)"></div>
+      <h3>🧠 ML-щик</h3><p class="muted">Отбор моделей, замеры WER/RTF, тесты ядра</p></div>
+    <div class="card"><div class="stripe" style="background:var(--tertiary)"></div>
+      <h3>🔗 Интегратор</h3><p class="muted">Пайплайн: диаризация до ASR, фильтры галлюцинаций</p></div>
+    <div class="card"><div class="stripe" style="background:var(--amber)"></div>
+      <h3>📱 Фронтенд</h3><p class="muted">Compose UI, экспорт JSON, release без INTERNET, подпись APK</p></div>
+    <div class="card"><div class="stripe" style="background:var(--pink)"></div>
+      <h3>🗣 ASR</h3><p class="muted">Whisper.cpp на устройстве, авто-потоки, RTF &lt; 1</p></div>
+  </div>
+</section>
+
+<!-- 8. ОГРАНИЧЕНИЯ -->
+<section class="slide" id="s8">
+  <h1>Честно: что в работе</h1>
+  <ul>
+    <li><span class="ic warn">⏳</span>Перебивания — когда двое говорят одновременно</li>
+    <li><span class="ic warn">⏳</span>Шумные записи — предобработка есть, запас по качеству растим</li>
+    <li><span class="ic warn">⏳</span>Оптимизация памяти на слабых устройствах</li>
+  </ul>
+  <div class="badge" style="margin-top:2.5rem">Всё остальное из ТЗ — работает и покрыто тестами</div>
+</section>
+
+<!-- 9. ФИНАЛ -->
+<section class="slide" id="s9">
+  <div class="hero">
+    <div class="orbit" style="border-color:var(--tertiary)"><span class="dot d3" style="top:-7px;bottom:auto;left:50%;transform:translateX(-50%)"></span><span class="dot d1" style="top:auto;bottom:18%;right:4%"></span><span class="dot d2" style="top:auto;bottom:18%;left:4%"></span></div>
+    <div class="hex"><div class="hex-ring" style="box-shadow:inset 0 0 0 2px var(--tertiary)"></div>✅</div>
+  </div>
+  <h1>Всё, что вы видели, работало<br><span class="ok">без единого пакета в сеть</span></h1>
+  <p class="muted mono" style="margin-top:1.5rem">github.com/MKristof2008/Xakton-ot-MIFE · Hex.Team</p>
+</section>
+
+<div class="nav">
+  <button onclick="go(-1)">← Назад</button>
+  <button onclick="go(1)">Вперёд →</button>
+</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];let i=0;
+  function show(n){slides[i].classList.remove('active');i=(n+slides.length)%slides.length;slides[i].classList.add('active');}
+  function go(d){show(i+d);}
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')go(1);
+    if(e.key==='ArrowLeft'||e.key==='PageUp')go(-1);
+  });
+  document.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')go(1);});
+</script>
+</body>
+</html>
