@@ -115,12 +115,12 @@ fun ImportScreen(state: AppViewModel.UiState, vm: AppViewModel) {
             Column(modifier = Modifier.padding(16.dp)) {
                 if (state.audioUri == null) {
                     Text(
-                        text = "Аудиофайл не выбран",
+                        text = "Файл не выбран",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = "mp3, wav, m4a, ogg, aac",
+                        text = "аудио или видео: mp3, wav, m4a, ogg, aac, mp4, mkv, mov",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -163,7 +163,14 @@ fun ImportScreen(state: AppViewModel.UiState, vm: AppViewModel) {
         Spacer(Modifier.height(8.dp))
 
         Button(
-            onClick = { picker.launch(arrayOf("audio/*")) },
+            // Видео тоже принимаем: звуковую дорожку вытаскивает AudioConverter
+            // через MediaExtractor, на устройстве и без сети. Человек часто
+            // присылает разговор как видео, а не отдельным аудиофайлом.
+            onClick = {
+                picker.launch(
+                    arrayOf("audio/*", "video/*", "application/octet-stream"),
+                )
+            },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(13.dp),
         ) {

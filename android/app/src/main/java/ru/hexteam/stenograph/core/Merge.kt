@@ -12,6 +12,9 @@ object Merge {
 
     const val UNKNOWN_SPEAKER = "speaker_unknown"
 
+    /** Единственный говорящий, когда диаризация не дала результата. */
+    const val SINGLE_SPEAKER = "speaker_1"
+
     fun merge(
         segments: List<AsrSegment>,
         speakers: List<SpeakerSegment>,
@@ -49,7 +52,10 @@ object Merge {
         if (text.isEmpty()) return emptyList()
 
         if (speakers.isEmpty()) {
-            return listOf(TranscriptLine(UNKNOWN_SPEAKER, segment.startMs, segment.endMs, text))
+            // Диаризация ничего не дала (тишина, музыка, очень короткая речь).
+            // Отдаём всё одному говорящему: «speaker_unknown» в каждой строке
+            // бесполезен и хуже честного «Спикер 1».
+            return listOf(TranscriptLine(SINGLE_SPEAKER, segment.startMs, segment.endMs, text))
         }
 
         val overlaps = speakers

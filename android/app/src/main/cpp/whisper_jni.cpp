@@ -39,14 +39,62 @@ const char *kHallucinationMarkers[] = {
     "редактор субтитров", "корректор", "субтитры", "продолжение следует",
     "спасибо за просмотр", "подписывайтесь", "ставьте лайк",
     "субтитры сделал", "dimatorzok", "продолжение в следующей",
+    // Титры и музыкальные вставки: whisper выдаёт их на тишине, музыке и
+    // на стыке дорожек — это не речь, в расшифровке им не место.
+    "музыка", "аплодисменты", "смех", "звукорежиссёр", "звукорежиссер",
 };
 
-bool looks_like_hallucination(const std::string &text) {
-    std::string lower;
-    lower.reserve(text.size());
-    for (unsigned char c : text) {
-        lower.push_back(static_cast<char>(std::tolower(c)));
+/**
+ * Приведение UTF-8 к нижнему регистру для кириллицы.
+ *
+ * `std::tolower` умеет только ASCII: на байтах кириллицы он ничего не меняет,
+ * поэтому «Редактор субтитров» не совпадал с маркером «редактор субтитров»
+ * и галлюцинации проходили в результат. Кириллица в UTF-8 — две байтовые
+ * пары; А-Я (D0 90..AF) и Ё (D0 81) переводятся в а-я (D0 B0..BF) и ё (D1 91).
+ */
+std::string to_lower_utf8(const std::string &src) {
+    std::string out;
+    out.reserve(src.size());
+    for (size_t i = 0; i < src.size();) {
+        const unsigned char c = static_cast<unsigned char>(src[i]);
+        if (c == 0xD0 && i + 1 < src.size()) {
+            const unsigned char n = static_cast<unsigned char>(src[i + 1]);
+            if (n >= 0x90 && n <= 0x9F) {          // А..П
+                out.push_back(static_cast<char>(0xD0));
+                out.push_back(static_cast<char>(n + 0x20));
+                i += 2;
+                continue;
+            }
+            if (n >= 0xA0 && n <= 0xAF) {          // Р..Я
+                out.push_back(static_cast<char>(0xD1));
+                out.push_back(static_cast<char>(n - 0x20));
+                i += 2;
+                continue;
+            }
+            if (n == 0x81) {                        // Ё
+                out.push_back(static_cast<char>(0xD1));
+                out.push_back(static_cast<char>(0x91));
+                i += 2;
+                continue;
+            }
+            out.push_back(src[i]);
+            out.push_back(src[i + 1]);
+            i += 2;
+            continue;
+        }
+        if (c < 0x80) {
+            out.push_back(static_cast<char>(std::tolower(c)));
+            i += 1;
+            continue;
+        }
+        out.push_back(src[i]);
+        ++i;
     }
+    return out;
+}
+
+bool looks_like_hallucination(const std::string &text) {
+    const std::string lower = to_lower_utf8(text);
     for (const char *marker : kHallucinationMarkers) {
         if (lower.find(marker) != std::string::npos) return true;
     }
