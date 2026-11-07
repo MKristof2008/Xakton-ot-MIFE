@@ -20,19 +20,106 @@ object Merge {
 
         val mapping = normalizeSpeakerIds(speakers)
 
+        // Сегмент ASR накрывает смену говорящего: whisper режет по паузам и по
+        // 30-секундным окнам, а не по голосам. Если просто взять «кто больше
+        // пересекается», вся реплика уходит одному — диалог становится
+        // монологом. Дробим сегмент, но ТОЛЬКО по паузам в речи: иначе
+        // получаются обрывки вида «давно» / «группы», отданные другому голосу.
         return segments
             .sortedBy { it.startMs }
-            .map { seg ->
-                val owner = bestOverlap(seg, speakers)
-                TranscriptLine(
-                    speakerId = owner?.let { mapping[it.speaker] ?: UNKNOWN_SPEAKER }
-                        ?: UNKNOWN_SPEAKER,
-                    startMs = seg.startMs,
-                    endMs = seg.endMs,
-                    text = seg.text.trim(),
-                )
-            }
+            .flatMap { seg -> splitAtPauses(seg, speakers, mapping) }
             .filter { it.text.isNotEmpty() }
+            .sortedBy { it.startMs }
+    }
+
+    /**
+     * Режет сегмент по смене говорящего, только если смена попадает на паузу.
+     *
+     * Без пословных таймкодов единственный надёжный сигнал границы — пауза в
+     * тексте (запятая, точка, тире) или достаточно длинный интервал тишины.
+     * Резать «по времени» посреди фразы нельзя: на замерах это давало
+     * «...в сторону лесов работой» + «давно» разным говорящим.
+     */
+    private fun splitAtPauses(
+        segment: AsrSegment,
+        speakers: List<SpeakerSegment>,
+        mapping: Map<String, String>,
+    ): List<TranscriptLine> {
+        val text = segment.text.trim()
+        if (text.isEmpty()) return emptyList()
+
+        if (speakers.isEmpty()) {
+            return listOf(TranscriptLine(UNKNOWN_SPEAKER, segment.startMs, segment.endMs, text))
+        }
+
+        val overlaps = speakers
+            .mapNotNull { spk ->
+                val from = maxOf(segment.startMs, spk.startMs)
+                val to = minOf(segment.endMs, spk.endMs)
+                if (to > from) Triple(spk, from, to) else null
+            }
+            .sortedBy { it.second }
+
+        val owner = bestOverlap(segment, speakers)
+        val ownerId = owner?.let { mapping[it.speaker] ?: UNKNOWN_SPEAKER } ?: UNKNOWN_SPEAKER
+
+        // Один говорящий или границы нет — отдаём целиком владельцу большинства.
+        val distinct = overlaps.map { mapping[it.first.speaker] ?: UNKNOWN_SPEAKER }.distinct()
+        if (distinct.size <= 1) {
+            return listOf(TranscriptLine(ownerId, segment.startMs, segment.endMs, text))
+        }
+
+        // Ищем точку разрыва: конец предложения внутри сегмента, ближайший
+        // к границе смены говорящего. Если такой нет — не режем.
+        val boundary = overlaps.drop(1).firstOrNull()?.second ?: return listOf(
+            TranscriptLine(ownerId, segment.startMs, segment.endMs, text),
+        )
+        val fraction = ((boundary - segment.startMs).toDouble() /
+            (segment.endMs - segment.startMs).coerceAtLeast(1L)).coerceIn(0.0, 1.0)
+
+        val cut = sentenceCut(text, fraction) ?: return listOf(
+            TranscriptLine(ownerId, segment.startMs, segment.endMs, text),
+        )
+
+        val firstPart = text.substring(0, cut).trim()
+        val secondPart = text.substring(cut).trim()
+        if (firstPart.isEmpty() || secondPart.isEmpty()) {
+            return listOf(TranscriptLine(ownerId, segment.startMs, segment.endMs, text))
+        }
+
+        val firstId = overlaps.first().let { mapping[it.first.speaker] ?: UNKNOWN_SPEAKER }
+        val secondId = overlaps.last().let { mapping[it.first.speaker] ?: UNKNOWN_SPEAKER }
+        if (firstId == secondId) {
+            return listOf(TranscriptLine(ownerId, segment.startMs, segment.endMs, text))
+        }
+
+        return listOf(
+            TranscriptLine(firstId, segment.startMs, boundary, firstPart),
+            TranscriptLine(secondId, boundary, segment.endMs, secondPart),
+        )
+    }
+
+    /**
+     * Позиция конца предложения, ближайшая к ожидаемой доле текста.
+     * null — подходящего разрыва нет, резать не стоит.
+     */
+    private fun sentenceCut(text: String, fraction: Double): Int? {
+        val target = (text.length * fraction).toInt()
+        var best: Int? = null
+        var bestDistance = Int.MAX_VALUE
+        for ((i, ch) in text.withIndex()) {
+            if (ch !in ".!?…") continue
+            // Хотя бы по три слова с каждой стороны: иначе получаются обрывки.
+            val left = text.substring(0, i).count { it == ' ' }
+            val right = text.substring(i).count { it == ' ' }
+            if (left < 3 || right < 3) continue
+            val distance = kotlin.math.abs(i - target)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                best = i + 1
+            }
+        }
+        return best
     }
 
     /** Говорящий с наибольшим пересечением по времени; null, если пересечения нет. */
