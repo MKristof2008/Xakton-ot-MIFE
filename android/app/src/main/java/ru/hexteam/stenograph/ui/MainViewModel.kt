@@ -37,7 +37,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val error: String? = null,
         val expectedSpeakers: Int? = null,
         val useLlm: Boolean = true,
-        val usingStubs: Boolean = false,
         val rtf: Double = 0.0,
     ) {
         val isBusy: Boolean
@@ -113,7 +112,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun reset() {
-        _state.update { UiState(usingStubs = false) }
+        _state.update { UiState() }
     }
 
     /** Копирует выбранный файл во внутреннее хранилище: движки работают с путём, не с Uri. */

@@ -8,7 +8,7 @@ import ru.hexteam.stenograph.core.SpeakerSegment
  *
  * Реализации:
  *  - [WhisperAsrEngine] — настоящая модель на устройстве;
- *  - [StubAsrEngine] — заглушка для отладки интерфейса без моделей.
+ *  - тестовые фейки объявляются в самих тестах, в APK не попадают.
  */
 interface AsrEngine {
     /** @param audioPath путь к аудиофайлу в локальном хранилище */

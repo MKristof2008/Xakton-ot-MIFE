@@ -63,20 +63,6 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (state.usingStubs) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    ),
-                ) {
-                    Text(
-                        text = "Демо-режим: движки-заглушки, реальные модели ещё не подключены. " +
-                            "Интерфейс и экспорт работают полностью.",
-                        modifier = Modifier.padding(12.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
 
             // Импорт аудио
             OutlinedButton(

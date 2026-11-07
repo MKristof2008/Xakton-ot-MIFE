@@ -106,21 +106,6 @@ fun ImportScreen(state: AppViewModel.UiState, vm: AppViewModel) {
             )
         }
 
-        if (state.usingStubs) {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
-            ) {
-                Text(
-                    text = "DEBUG FAKE: движки-заглушки, реальные модели не подключены. " +
-                        "Интерфейс и экспорт работают полностью.",
-                    modifier = Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-
         // Зона выбранного файла
         Surface(
             shape = RoundedCornerShape(16.dp),

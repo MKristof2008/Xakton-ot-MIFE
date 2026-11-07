@@ -45,7 +45,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val error: String? = null,
         val expectedSpeakers: Int? = null,
         val useLlm: Boolean = true,
-        val usingStubs: Boolean = false,
         val rtf: Double = 0.0,
         val processingMs: Long = 0L,
         /** Отображаемые имена говорящих. В экспорт идут исходные speaker_N. */
@@ -208,7 +207,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Сброс на главный экран для новой записи. */
     fun reset() {
         processJob?.cancel()
-        _state.update { UiState(usingStubs = false) }
+        _state.update { UiState() }
     }
 
     /** JSON строго по схеме ТЗ. Переименования в экспорт не попадают. */

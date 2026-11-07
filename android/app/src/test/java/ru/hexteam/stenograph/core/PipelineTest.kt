@@ -5,20 +5,54 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import ru.hexteam.stenograph.engine.Stubs
+import ru.hexteam.stenograph.engine.AsrEngine
+import ru.hexteam.stenograph.engine.DiarizationEngine
+import ru.hexteam.stenograph.engine.LlmEngine
 
 /**
- * Сквозная проверка пайплайна на заглушках.
+ * Сквозная проверка пайплайна на детерминированных фейках движков.
  *
- * Доказывает, что весь путь «аудио → распознавание → диаризация → сшивка → JSON»
- * работает без моделей и без сети — это требование ТЗ для этапа разработки.
+ * Тест проверяет логику самого пайплайна — порядок этапов, сшивку, схему
+ * JSON — и не должен зависеть от моделей. Фейки объявлены здесь, внутри
+ * теста: в приложение они не компилируются, поэтому подменить работу
+ * модели в APK невозможно (требование ТЗ).
  */
 class PipelineTest {
 
+    private class FakeAsr : AsrEngine {
+        override suspend fun transcribe(audioPath: String): List<AsrSegment> = listOf(
+            AsrSegment(0, 2600, "добрый день коллеги начнём совещание"),
+            AsrSegment(2600, 6100, "давайте обсудим сроки по проекту"),
+            AsrSegment(6100, 9800, "я предлагаю сдать базовый уровень к пятнице"),
+        )
+
+        override fun isReady(): Boolean = true
+    }
+
+    private class FakeDiarization : DiarizationEngine {
+        override suspend fun diarize(
+            audioPath: String,
+            expectedSpeakers: Int?,
+        ): List<SpeakerSegment> = listOf(
+            SpeakerSegment(0, 6100, "raw_0"),
+            SpeakerSegment(6100, 9800, "raw_1"),
+        )
+
+        override fun isReady(): Boolean = true
+    }
+
+    private class FakeLlm : LlmEngine {
+        /** Пунктуация: заглавная в начале и точка в конце. */
+        override suspend fun clean(text: String): String =
+            text.trim().replaceFirstChar { it.uppercase() } + "."
+
+        override fun isReady(): Boolean = true
+    }
+
     private val pipeline = Pipeline(
-        asr = Stubs.StubAsr(),
-        diarization = Stubs.StubDiarization(),
-        llm = Stubs.StubLlm(),
+        asr = FakeAsr(),
+        diarization = FakeDiarization(),
+        llm = FakeLlm(),
     )
 
     @Test
