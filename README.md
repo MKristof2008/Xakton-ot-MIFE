@@ -356,6 +356,14 @@ output.save_result(result, "result.json", duration_ms=10_000)   # с валид�
 
 ---
 
+
+## Скачать
+
+**Готовый APK: [v0.2.0](https://github.com/MKristof2008/Xakton-ot-MIFE/releases/tag/v0.2.0)**
+(152 МБ, arm64, Android 8.0+). Модели внутри — сеть не нужна.
+
+
+
 ## Android-приложение (сдаваемая сборка)
 
 `android/` — рабочее приложение на Kotlin + Jetpack Compose, собрано и проверено
