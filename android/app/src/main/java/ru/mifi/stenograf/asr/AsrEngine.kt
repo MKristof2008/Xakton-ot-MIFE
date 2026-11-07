@@ -242,31 +242,34 @@ class AsrEngine(
         var buf = StringBuilder()
         var segStart = ts.firstOrNull() ?: 0f
         var prevEnd = segStart
+        // Пробел может прийти отдельным токеном: zipformer отдаёт ' ' или '▁'
+        // самостоятельным куском между словами. Раньше такой токен просто
+        // отбрасывался, и слова склеивались: «обожает» + ' ' + «рыбку» ->
+        // «обожаетрыбку». Запоминаем его и ставим перед следующим словом.
+        var pendingSpace = false
         for (i in tokens.indices) {
             val t = ts[i]
             if (buf.isNotEmpty() && (t - prevEnd) > 1.0f) {
                 out += Triple(segStart, prevEnd, tidyText(buf.toString()))
                 buf = StringBuilder()
                 segStart = t
+                pendingSpace = false
             }
-            // BPE-токены: граница слова закодирована символом `▁` В НАЧАЛЕ токена.
-            // Он же означает «здесь начинается новое слово». Один `▁` — это
-            // пробел перед словом; сам символ в текст не попадает.
-            // Раньше он заменялся на пробел ВНУТРИ токена, из-за чего получалось
-            // «До б ры й д ень» вместо «Добрый день».
+            // Граница слова: у zipformer — `▁` в начале токена, у Whisper —
+            // обычный пробел перед токеном (« After», « early»).
             val raw = tokens[i]
-            // У zipformer граница слова — `▁` в начале токена, у Whisper —
-            // обычный пробел перед токеном (« After», « early»). Без этого
-            // английский текст склеивался бы в «Afterearlynightfall».
             val startsWord = raw.startsWith(MARK) || raw.startsWith(" ")
             val piece = raw.removePrefix(MARK.toString()).trim()
             if (piece.isEmpty()) {
+                // Отдельный пробел. Для первого токена реплики он не нужен.
+                pendingSpace = true
                 prevEnd = t
                 continue
             }
-            if (buf.isNotEmpty() && startsWord && !buf.last().isWhitespace()) {
+            if (buf.isNotEmpty() && (startsWord || pendingSpace) && !buf.last().isWhitespace()) {
                 buf.append(' ')
             }
+            pendingSpace = false
             buf.append(piece)
             prevEnd = t
         }
