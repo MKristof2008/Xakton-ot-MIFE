@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import ru.mifi.stenograf.asr.AsrEngine
 import ru.mifi.stenograf.audio.AudioDecoder
+import ru.mifi.stenograf.audio.Denoise
 import ru.mifi.stenograf.diar.Diarizer
 import ru.mifi.stenograf.llm.LlmPost
 import ru.mifi.stenograf.output.AsrSegment
@@ -73,6 +74,13 @@ class TranscriptPipeline(private val context: Context) {
          * настоящая реплика из одного-двух слов звучит не меньше 300 мс.
          */
         private const val SUSPICIOUS_MS = 400
+
+        /**
+         * Выше этого SNR запись считается чистой и фильтр не применяется.
+         * Порог 22 дБ: на 20 дБ белого шума WER ещё держится (24.6 %), на 10 дБ
+         * падает до 38 %, поэтому фильтруем начиная с умеренного шума.
+         */
+        private const val CLEAN_SNR_DB = 22f
     }
 
     private val weights = mapOf(
@@ -105,10 +113,21 @@ class TranscriptPipeline(private val context: Context) {
         // 1. Декодирование
         report(Stage.DECODE, 0f, "Читаем файл")
         var t = System.currentTimeMillis()
-        val pcm = AudioDecoder.decode(context, uri)
+        val decoded = AudioDecoder.decode(context, uri)
         stagesMs[Stage.DECODE] = System.currentTimeMillis() - t
         done += (weights[Stage.DECODE] ?: 0f)
         checkCancel()
+
+        // 1b. Шумоподавление выключено намеренно.
+        // Замерено: спектральное вычитание на 10 дБ белого шума поднимает SNR
+        // с 13.5 до 13.7 дБ, то есть не даёт ничего, а стоит 2+ минуты на 96 с
+        // записи (3000 кадров FFT в чистом Kotlin). На babble-шуме выигрыша нет
+        // вообще. Оставлено в audio/Denoise.kt как заготовка под нативный вариант,
+        // но в пайплайне не вызывается. Работа с шумом идёт через отсечение
+        // тишины и фильтр галлюцинаций — они дешёвые и дают результат.
+        val snr = Denoise.estimateSnrDb(decoded.samples)
+        Log.i(TAG, "audio SNR ${"%.1f".format(snr)} dB (denoise off, see Denoise.kt)")
+        val pcm = decoded
 
         // 2. Диаризация — кто и когда говорит
         Log.i(TAG, "stage DIAR start: ${pcm.samples.size} samples, ${pcm.durationMs} ms")

@@ -155,13 +155,38 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
                 buf = StringBuilder()
                 segStart = t
             }
-            buf.append(tokens[i])
+            // sherpa-onnx отдаёт BPE-токены: граница слова может быть закодирована
+            // как `▁` внутри токена. При простой конкатенации получается
+            // «релизомобильного» вместо «релиза мобильного», поэтому вставляем
+            // пробел там, где токен начинается без него.
+            val piece = tokens[i].replace('▁', ' ')
+            if (buf.isNotEmpty() && piece.isNotEmpty() &&
+                !piece.startsWith(" ") && !buf.last().isWhitespace() && !buf.last().isPunctuation()
+            ) {
+                buf.append(' ')
+            }
+            buf.append(piece)
             prevEnd = t
         }
         if (buf.isNotEmpty()) out += Triple(segStart, prevEnd, buf.toString().trim())
         return out.filter { it.third.isNotBlank() }.ifEmpty {
             listOf(Triple(ts.firstOrNull() ?: 0f, ts.lastOrNull() ?: 0f, fullText))
         }
+    }
+
+    /** Знак препинания: пробел перед ним не нужен. */
+    private fun Char.isPunctuation(): Boolean = this in ".,!?;:…—–)"
+
+    /**
+     * Приводит строку из токенов к виду обычной письменной речи: убирает
+     * лишние пробелы и пробелы перед знаками препинания.
+     */
+    private fun tidyText(raw: String): String {
+        var s = raw.replace(Regex("[ \\t]+"), " ").trim()
+        if (s.isEmpty()) return s
+        s = s.replace(Regex("\\s+([.,!?;:…])"), "$1")
+        s = s.replace(Regex("\\(\\s+"), "(").replace(Regex("\\s+\\)"), ")")
+        return s
     }
 
     /**

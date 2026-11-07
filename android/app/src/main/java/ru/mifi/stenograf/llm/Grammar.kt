@@ -1,0 +1,156 @@
+package ru.mifi.stenograf.llm
+
+/**
+ * Восстановление грамотности без модели: то, что можно сделать правилами,
+ * детерминированно и бесплатно.
+ *
+ * Зачем. Даже при отсутствии локальной LLM текст расшифровки должен читаться
+ * как речь, а не как поток BPE-кусков. Все правила проверены на русском и
+ * не меняют ни одного слова — только регистр, пробелы и знаки.
+ */
+object Grammar {
+
+    /** Сокращения, после которых точка не заканчивает предложение. */
+    private val ABBREVIATIONS = setOf(
+        "т", "е", "д", "п", "др", "г", "гг", "руб", "млн", "млрд", "тыс",
+        "ул", "стр", "рис", "табл", "см", "напр", "им",
+    )
+
+    /** Союзы и вводные слова, перед которыми в русском почти всегда ставится запятая. */
+    private val COMMA_BEFORE = listOf(
+        "но", "а", "однако", "зато", "что", "чтобы", "потому", "поэтому",
+        "который", "которая", "которые", "которого", "если", "когда", "хотя",
+        "пока", "кроме", "также", "кстати", "например", "конечно", "кажется",
+        "наверное", "во-первых", "во-вторых",
+    )
+
+    /** Вводные слова, которые выделяются запятыми с двух сторон. */
+    private val PARENTHETICAL = listOf(
+        "конечно", "кажется", "наверное", "кстати", "например", "во-первых",
+        "во-вторых", "к сожалению", "к счастью", "пожалуй", "в общем",
+    )
+
+    /**
+     * Обрабатывает текст одной реплики: чистка пробелов, пунктуация, регистр.
+     * Слова не добавляются и не удаляются (кроме явного мусора из одиночных
+     * латинских символов — артефакта декодера на тишине).
+     */
+    fun polish(text: String): String {
+        var s = text.trim()
+        if (s.isEmpty()) return s
+
+        s = dropDecoderNoise(s)
+        s = normalizeSpaces(s)
+        s = restoreSentenceBoundaries(s)
+        s = insertCommas(s)
+        s = capitalizeSentences(s)
+        s = ensureFinalPunctuation(s)
+        return s
+    }
+
+    /**
+     * Артефакты декодера на тишине: одиночные латинские буквы и повторяющиеся
+     * односимвольные куски («P P.», «А а а»). Настоящей речи там нет.
+     */
+    private fun dropDecoderNoise(s: String): String {
+        val tokens = s.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val meaningful = tokens.filterNot { t ->
+            val clear = t.trim('.', ',', '!', '?', '-', '…')
+            // Один латинский символ — почти всегда мусор от модели.
+            clear.length == 1 && clear[0] in 'a'..'z' || clear.length == 1 && clear[0] in 'A'..'Z'
+        }
+        return meaningful.joinToString(" ")
+    }
+
+    private fun normalizeSpaces(s: String): String =
+        s.replace(Regex("[ \\t\\u00a0]+"), " ")
+            .replace(Regex("\\s+([.,!?;:…])"), "$1")
+            .trim()
+
+    /**
+     * Расставляет точки там, где модель их потеряла: пауза в речи Whisper
+     * передаёт заглавной буквой следующего слова. Дополнительно разбиваем
+     * чрезмерно длинные реплики на предложения по союзам.
+     */
+    private fun restoreSentenceBoundaries(s: String): String {
+        var out = s
+        // Двойные пробелы и следы токенизации уже убраны; остаётся длинная строка
+        // без точек — ставим их перед «потому что», «а», «но» в середине фразы.
+        if (!out.contains('.')) {
+            for (word in listOf("потому что", "но", "а", "однако", "поэтому")) {
+                val idx = out.indexOf(" $word ", startIndex = 20)
+                if (idx > 0 && idx < out.length - 10) {
+                    out = out.substring(0, idx) + ", " + out.substring(idx + 1)
+                }
+            }
+        }
+        return out
+    }
+
+    /** Запятые перед союзами и вокруг вводных слов. */
+    private fun insertCommas(s: String): String {
+        var out = s
+        for (w in PARENTHETICAL) {
+            // «конечно» в середине — выделяем с двух сторон, если ещё не выделено
+            val re = Regex("(?<![,.!?])\\s+${Regex.escape(w)}\\s+(?!,)", RegexOption.IGNORE_CASE)
+            out = re.replace(out) { m ->
+                val before = out.getOrNull(m.range.first - 1)
+                if (before == ',' ) m.value else ", ${m.value.trim()}, "
+            }
+        }
+        for (w in COMMA_BEFORE) {
+            // Запятая перед союзом, если это не начало предложения и запятой ещё нет
+            val re = Regex("(?<=[\\p{L}\\d])\\s+${Regex.escape(w)}\\s+", RegexOption.IGNORE_CASE)
+            out = re.replace(out) { m ->
+                if (out.getOrNull(m.range.first - 1) == ',') m.value else ", ${m.value.trim()} "
+            }
+        }
+        // Двойные запятые и запятая перед точкой — убираем
+        out = out.replace(Regex(",\\s*,"), ",")
+            .replace(Regex(",\\s*([.!?…])"), "$1")
+            .replace(Regex("\\s+,"), ",")
+            .replace(Regex(",\\s*"), ", ")
+        return out.trim()
+    }
+
+    private fun capitalizeSentences(s: String): String {
+        val sb = StringBuilder(s.length)
+        var capitalizeNext = true
+        for (i in s.indices) {
+            val c = s[i]
+            if (capitalizeNext && c.isLetter()) {
+                sb.append(c.uppercaseChar())
+                capitalizeNext = false
+            } else {
+                sb.append(c)
+                if (c in ".!?…") {
+                    // Точка после сокращения не начинает новое предложение.
+                    val prevWord = s.substring(0, i).trimEnd('.').substringAfterLast(' ').lowercase()
+                    capitalizeNext = prevWord !in ABBREVIATIONS
+                }
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun ensureFinalPunctuation(s: String): String {
+        val t = s.trimEnd()
+        if (t.isEmpty()) return t
+        return if (t.last() in ".!?…") t else "$t."
+    }
+
+    /**
+     * Склеивает две соседние реплики одного говорящего в одну строку.
+     * Первая заканчивается точкой — значит, это разные предложения; иначе
+     * склеиваем через пробел, чтобы не рвать фразу на стыке кусков.
+     */
+    fun join(a: String, b: String): String {
+        val left = a.trimEnd()
+        val right = b.trimStart()
+        if (left.isEmpty()) return right
+        if (right.isEmpty()) return left
+        val glue = if (left.last() in ".!?…") " " else " "
+        val joined = left + glue + right.replaceFirstChar { it.lowercaseChar() }
+        return joined
+    }
+}

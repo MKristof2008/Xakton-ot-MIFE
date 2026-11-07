@@ -111,14 +111,8 @@ class LlmPost(private val context: Context) {
     private fun words(s: String): List<String> =
         s.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
 
-    /** Детерминированное восстановление регистра и знаков — без модели. */
-    fun rulePolish(text: String): String {
-        var t = text.trim().replace(Regex("\\s+"), " ")
-        if (t.isEmpty()) return t
-        t = t.replaceFirstChar { it.titlecase() }
-        if (t.last() !in ".!?…") t += "."
-        return t
-    }
+    /** Детерминированное восстановление регистра и знаков — без модели (Grammar.kt). */
+    fun rulePolish(text: String): String = Grammar.polish(text)
 
     fun close() {
         runCatching { engine?.close() }
