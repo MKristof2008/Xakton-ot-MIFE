@@ -10,6 +10,9 @@ package ru.mifi.stenograf.llm
  */
 object Grammar {
 
+    /** С какого места реплики начинаем искать границу предложения (символов). */
+    private const val MIN_SPLIT_CHARS = 45
+
     /** Сокращения, после которых точка не заканчивает предложение. */
     private val ABBREVIATIONS = setOf(
         "т", "е", "д", "п", "др", "г", "гг", "руб", "млн", "млрд", "тыс",
@@ -107,8 +110,49 @@ object Grammar {
                     out = out.substring(0, idx) + ", " + out.substring(idx + 1)
                 }
             }
+            // Очень длинную реплику без единой точки читать невозможно:
+            // zipformer вообще не ставит знаков. Делим её на предложения
+            // по союзам — грубо, но текст становится читаемым.
+            out = splitLongRun(out)
         }
         return out
+    }
+
+    /** Союзы и частицы, с которых естественно начинать новое предложение. */
+    private val SENTENCE_START = listOf(
+        "а", "но", "и вот", "вот", "тогда", "потом", "потому что", "поэтому",
+        "слушай", "смотри", "давай", "короче",
+    )
+
+    /**
+     * Делит длинную реплику без знаков на предложения по союзам.
+     *
+     * Порог [MIN_SPLIT_CHARS] выбран так, чтобы не трогать короткие реплики:
+     * в них одна мысль, дробление только мешает. Если делить нечего —
+     * возвращаем текст как есть, лучше без точек, чем с точкой посреди слова.
+     */
+    private fun splitLongRun(s: String): String {
+        val words = s.split(' ').filter { it.isNotEmpty() }
+        if (words.size < 12) return s
+
+        val out = StringBuilder()
+        var sinceSplit = 0
+        for ((i, w) in words.withIndex()) {
+            if (i > 0) {
+                val lower = w.lowercase()
+                val canSplit = sinceSplit >= MIN_SPLIT_CHARS && i < words.size - 3 &&
+                    SENTENCE_START.any { lower == it || lower.startsWith("$it ") }
+                if (canSplit) {
+                    out.append(". ")
+                    sinceSplit = 0
+                } else {
+                    out.append(' ')
+                }
+            }
+            out.append(w)
+            sinceSplit += w.length + 1
+        }
+        return out.toString()
     }
 
     /** Запятые перед союзами и вокруг вводных слов. */
