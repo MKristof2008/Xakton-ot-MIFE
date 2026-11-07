@@ -42,9 +42,17 @@ if [ -z "${CMAKE_BIN:-}" ] || [ ! -x "$CMAKE_BIN" ]; then
 fi
 echo "cmake: $CMAKE_BIN"
 
-"$CMAKE_BIN" -S "$SRC" -B "$BUILD" \
+# Генератор задаётся явно: на Windows CMake по умолчанию выбирает NMake,
+# а он в Android SDK не поставляется — конфигурация падала.
+NINJA="$(ls -d "$SDK"/cmake/*/bin/ninja.exe "$SDK"/cmake/*/bin/ninja 2>/dev/null | sort -V | tail -1)"
+if [ -z "${NINJA:-}" ] || [ ! -x "$NINJA" ]; then
+    echo "Не найден ninja в Android SDK. Установите CMake через sdkmanager." >&2
+    exit 1
+fi
+
+"$CMAKE_BIN" -G Ninja -S "$SRC" -B "$BUILD" \
     -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
-    -DCMAKE_MAKE_PROGRAM="$SDK/cmake/3.22.1/bin/ninja.exe" \
+    -DCMAKE_MAKE_PROGRAM="$NINJA" \
     -DANDROID_ABI=arm64-v8a \
     -DANDROID_PLATFORM=android-26 \
     -DCMAKE_BUILD_TYPE=Release \

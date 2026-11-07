@@ -23,7 +23,8 @@ bash "$HERE/fetch_libs.sh"
 
 echo
 echo "=== 2/5. Исходники whisper.cpp ==="
-if [ ! -d "$CPP/whisper.cpp" ]; then
+if [ ! -f "$CPP/whisper.cpp/include/whisper.h" ]; then
+    rm -rf "$CPP/whisper.cpp"
     git clone --depth 1 https://github.com/ggerganov/whisper.cpp "$CPP/whisper.cpp"
 else
     echo "уже есть: whisper.cpp"
@@ -31,10 +32,19 @@ fi
 
 echo
 echo "=== 3/5. Исходники llama.cpp ==="
-if [ ! -d "$CPP/llama.cpp" ]; then
-    git clone --depth 1 https://github.com/ggml-org/llama.cpp "$CPP/llama.cpp"
+# Версия закреплена: llm_jni.cpp написан под конкретный API llama.cpp
+# (например, llama_model_params.use_mmap). В свежем master поля
+# переименовывают, и сборка падает — поэтому нужен именно этот коммит.
+LLAMA_TAG="b8027"
+# Проверяем не каталог, а конкретный заголовок: неудачный клон оставляет
+# пустую папку, и повторный запуск молча ничего бы не скачал.
+if [ ! -f "$CPP/llama.cpp/include/llama.h" ]; then
+    rm -rf "$CPP/llama.cpp"
+    git clone --depth 1 --branch "$LLAMA_TAG" \
+        https://github.com/ggml-org/llama.cpp "$CPP/llama.cpp"
+    echo "llama.cpp @ $LLAMA_TAG"
 else
-    echo "уже есть: llama.cpp"
+    echo "уже есть: llama.cpp ($(git -C "$CPP/llama.cpp" describe --tags 2>/dev/null || echo unknown))"
 fi
 
 echo
