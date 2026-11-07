@@ -74,6 +74,10 @@ class HistoryStore(private val context: Context) {
         processingMs: Long,
         speakerCount: Int,
         replicas: List<Replica>,
+        /** false — не копировать аудио (настройка «Хранить аудио в истории»). */
+        keepAudio: Boolean = true,
+        /** Сколько записей держать (настройка «Сколько записей держать»). */
+        limit: Int = MAX_ITEMS,
     ): Item? = withContext(Dispatchers.IO) {
         try {
             val id = "h${System.currentTimeMillis()}"
@@ -81,7 +85,7 @@ class HistoryStore(private val context: Context) {
 
             // Копия аудио. Размер ограничен: расшифровка 10 минут = ~19 МБ WAV,
             // для истории это приемлемо, но старые записи вытесняются.
-            val audioPath = audioUri?.let { uri -> copyAudio(dir, uri) }
+            val audioPath = if (keepAudio) audioUri?.let { uri -> copyAudio(dir, uri) } else null
 
             val json = JSONObject()
                 .put("id", id)
@@ -96,8 +100,9 @@ class HistoryStore(private val context: Context) {
             File(dir, "meta.json").writeText(json.toString(), Charsets.UTF_8)
 
             val ids = (listOf(id) + readIndex()).distinct()
-            // Держим не больше MAX_ITEMS: самое старое удаляем вместе с аудио.
-            val keep = ids.take(MAX_ITEMS)
+            // Держим не больше limit (по умолчанию MAX_ITEMS): самое старое
+            // удаляем вместе с аудио. Значение приходит из настроек.
+            val keep = ids.take(limit.coerceAtLeast(1))
             (ids - keep.toSet()).forEach { dirOf(it).deleteRecursively() }
             writeIndex(keep)
 

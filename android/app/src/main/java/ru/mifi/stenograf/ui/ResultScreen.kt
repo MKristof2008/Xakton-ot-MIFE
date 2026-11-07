@@ -76,7 +76,11 @@ fun ResultScreen(
     onExportText: () -> Unit,
 ) {
     val result = state.result ?: return
-    var showTimecodes by remember { mutableStateOf(true) }
+    // Начальное значение — из настроек, а не всегда true: раньше тумблер
+    // «Показывать таймкоды по умолчанию» сохранялся, но экран его не читал.
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val settings = remember { ru.mifi.stenograf.settings.SettingsStore(appContext) }
+    var showTimecodes by remember { mutableStateOf(settings.showTimecodes) }
     var query by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(result) { Haptics.success(context) }

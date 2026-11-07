@@ -132,6 +132,8 @@ class AppState(private val context: Context) : ViewModel() {
                         processingMs = res.processingMs,
                         speakerCount = res.speakerCount,
                         replicas = res.replicas,
+                        keepAudio = settings.keepAudio,
+                        limit = settings.historyLimit,
                     )
                 }
                 viewingTitle = ""
