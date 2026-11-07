@@ -45,6 +45,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
@@ -91,6 +92,12 @@ fun ResultScreen(
     val audioPath = state.recordedPath ?: state.audioUri?.takeIf { it.scheme == "file" }?.path
     LaunchedEffect(audioPath) {
         if (audioPath != null) playback.prepare(audioPath) else playback.stop()
+    }
+    // Освобождаем MediaPlayer при уходе с экрана. Без этого системный плеер
+    // писал в лог «MediaPlayer finalized without being released», а нативные
+    // ресурсы висели до сборки мусора — на длинных записях это лишняя память.
+    DisposableEffect(Unit) {
+        onDispose { playback.release() }
     }
     // Тикер позиции, пока играет.
     LaunchedEffect(playback.isPlaying) {
