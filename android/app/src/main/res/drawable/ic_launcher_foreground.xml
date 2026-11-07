@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Иконка: волна речи. Столбики разной высоты в безопасной зоне адаптивной иконки. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M36,49 h5 a2.5,2.5 0 0 1 2.5,2.5 v5 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-5 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M46,40 h5 a2.5,2.5 0 0 1 2.5,2.5 v23 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-23 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M56,31 h5 a2.5,2.5 0 0 1 2.5,2.5 v41 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-41 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+    <path android:fillColor="#CCFFFFFF"
+        android:pathData="M66,38 h5 a2.5,2.5 0 0 1 2.5,2.5 v27 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-27 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+    <path android:fillColor="#99FFFFFF"
+        android:pathData="M76,47 h5 a2.5,2.5 0 0 1 2.5,2.5 v9 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-9 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+</vector>

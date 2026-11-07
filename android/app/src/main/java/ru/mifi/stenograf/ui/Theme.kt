@@ -11,21 +11,32 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/** Палитра: спокойная, тёмная основа, высокий контраст текста. */
-private val Blue = Color(0xFF2F6BFF)
-private val BlueDark = Color(0xFF8FB0FF)
-private val Ink = Color(0xFF11151C)
-private val Paper = Color(0xFFF6F7F9)
-private val Coral = Color(0xFFD9453A)
+/**
+ * Палитра. Основная тема — тёмная: приложение про аудио и текст, тёмный фон
+ * меньше утомляет на длинных расшифровках и лучше смотрится на демо.
+ */
+private val Blue = Color(0xFF4C7DFF)
+private val Cyan = Color(0xFF38E1C4)
+private val Violet = Color(0xFF8B5CF6)
+private val Coral = Color(0xFFFF6B6B)
 
-/** Цвета спикеров — различимы и в тёмной, и в светлой теме. */
+private val Ink = Color(0xFF0A0D14)
+private val InkSurface = Color(0xFF141A26)
+private val InkSurfaceHigh = Color(0xFF1C2433)
+private val OnInk = Color(0xFFEDF1F8)
+private val Muted = Color(0xFF8B97AC)
+
+private val LightPaper = Color(0xFFF5F7FB)
+private val LightSurface = Color(0xFFFFFFFF)
+
+/** Цвета говорящих: различимы между собой, в том числе при дальтонизме. */
 val SpeakerColors = listOf(
-    Color(0xFF2F6BFF), // синий
-    Color(0xFF16914F), // зелёный
-    Color(0xFFB45309), // охра
-    Color(0xFF8B3FD1), // фиолетовый
-    Color(0xFF0E7490), // бирюзовый
-    Color(0xFFB02A6E), // бордо
+    Color(0xFF4C7DFF), // синий
+    Color(0xFF2FBF71), // зелёный
+    Color(0xFFE8A317), // янтарный
+    Color(0xFFB06AE8), // фиолетовый
+    Color(0xFF00A6B8), // бирюзовый
+    Color(0xFFE85D75), // коралловый
 )
 
 fun speakerColor(speakerId: String): Color {
@@ -33,35 +44,57 @@ fun speakerColor(speakerId: String): Color {
     return SpeakerColors[(n - 1).coerceAtLeast(0) % SpeakerColors.size]
 }
 
-private val Light = lightColorScheme(
+/** Фирменный градиент: им залиты акцентные кнопки и заголовки-плашки. */
+val BrandGradient = listOf(Color(0xFF4C7DFF), Color(0xFF7B4CFF))
+val AccentGradient = listOf(Color(0xFF38E1C4), Color(0xFF4C7DFF))
+
+private val Dark = darkColorScheme(
     primary = Blue,
     onPrimary = Color.White,
-    secondary = Color(0xFF4B5563),
-    background = Paper,
-    onBackground = Ink,
-    surface = Color.White,
-    onSurface = Ink,
+    primaryContainer = Color(0xFF1E2C4D),
+    onPrimaryContainer = Color(0xFFD6E2FF),
+    secondary = Cyan,
+    onSecondary = Ink,
+    tertiary = Violet,
+    background = Ink,
+    onBackground = OnInk,
+    surface = InkSurface,
+    onSurface = OnInk,
+    surfaceVariant = InkSurfaceHigh,
+    onSurfaceVariant = Muted,
+    outline = Color(0xFF2A3446),
     error = Coral,
 )
 
-private val Dark = darkColorScheme(
-    primary = BlueDark,
-    onPrimary = Color(0xFF08122A),
-    secondary = Color(0xFFB6BDC9),
-    background = Color(0xFF0B0F15),
-    onBackground = Color(0xFFE8EBF0),
-    surface = Color(0xFF141A22),
-    onSurface = Color(0xFFE8EBF0),
-    error = Color(0xFFFF8A80),
+private val Light = lightColorScheme(
+    primary = Color(0xFF2F5BDB),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFDDE6FF),
+    onPrimaryContainer = Color(0xFF0B1B3D),
+    secondary = Color(0xFF0E8F7C),
+    onSecondary = Color.White,
+    tertiary = Color(0xFF6D3FD4),
+    background = LightPaper,
+    onBackground = Color(0xFF121722),
+    surface = LightSurface,
+    onSurface = Color(0xFF121722),
+    surfaceVariant = Color(0xFFE9EDF6),
+    onSurfaceVariant = Color(0xFF5A6478),
+    outline = Color(0xFFD3DAE8),
+    error = Color(0xFFD93F3F),
 )
 
 private val AppTypography = Typography(
-    headlineSmall = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.SemiBold),
-    titleMedium = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Medium),
-    bodyLarge = TextStyle(fontSize = 17.sp),
-    bodyMedium = TextStyle(fontSize = 15.sp),
-    labelLarge = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium),
-    labelSmall = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium),
+    displaySmall = TextStyle(fontSize = 32.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp),
+    headlineMedium = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp),
+    headlineSmall = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
+    titleLarge = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.SemiBold),
+    titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+    bodyLarge = TextStyle(fontSize = 17.sp, lineHeight = 24.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    labelLarge = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+    labelMedium = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
+    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp),
 )
 
 @Composable

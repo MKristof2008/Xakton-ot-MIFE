@@ -73,6 +73,9 @@ class AppState(private val context: Context) : ViewModel() {
     }
 
     fun start(uri: Uri, displayName: String, speakers: Int?) {
+        // Повторный старт при уже идущей обработке игнорируем: два пайплайна
+        // одновременно съедают всю память и роняют процесс.
+        if (job?.isActive == true) return
         audioUri = uri
         fileName = displayName
         screen = Screen.PROCESSING

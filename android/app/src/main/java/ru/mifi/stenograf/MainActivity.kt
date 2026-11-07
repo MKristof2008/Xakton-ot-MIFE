@@ -53,8 +53,11 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
     val state = remember { AppState(context) }
 
     // Автозапуск обработки при отладочном intent — ускоряет прогоны с ПК.
+    // remember(uri) обязателен: без ключа повторная доставка intent-а
+    // (новый тап, возврат в приложение) запускала ВТОРОЙ прогон параллельно,
+    // и два пайплайна дрались за память и модели.
     if (autorunUri != null) {
-        remember {
+        remember(autorunUri) {
             state.start(autorunUri, autorunUri.lastPathSegment ?: "debug", autorunSpeakers)
             true
         }

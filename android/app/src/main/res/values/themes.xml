@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Stenograf" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">#0B0F15</item>
-        <item name="android:windowBackground">#F6F7F9</item>
+    <!-- Тёмная тема по умолчанию: приложение для демо и длинных расшифровок.
+         Compose рисует свой цвет, здесь важен только фон окна до старта. -->
+    <style name="Theme.Stenograf" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#0A0D14</item>
+        <item name="android:navigationBarColor">#0A0D14</item>
+        <item name="android:windowBackground">#0A0D14</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
