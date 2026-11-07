@@ -329,7 +329,7 @@ private fun OptionRow(
 @Composable
 private fun AboutSection() {
     val rows = listOf(
-        "Версия" to "0.3.0",
+        "Версия" to "0.5.0",
         "Распознавание" to "zipformer-ru (Vosk model-ru)",
         "Диаризация" to "pyannote segmentation-3.0 + 3D-Speaker",
         "Рантайм" to "sherpa-onnx 2.0.1",

@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -74,8 +76,15 @@ fun ResultScreen(
 ) {
     val result = state.result ?: return
     var showTimecodes by remember { mutableStateOf(true) }
+    var query by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(result) { Haptics.success(context) }
+
+    // Поиск по тексту расшифровки: регистр не важен.
+    val shown = remember(query, result.replicas) {
+        if (query.isBlank()) result.replicas
+        else result.replicas.filter { it.text.contains(query, ignoreCase = true) }
+    }
 
     // Плеер: живой, если у результата есть файл аудио (запись или история).
     val playback = remember { AudioPlayback() }
@@ -92,7 +101,7 @@ fun ResultScreen(
     }
     // Активная реплика: та, внутри которой сейчас играет звук.
     val activeIndex = if (audioPath == null) -1
-    else result.replicas.indexOfFirst { playback.positionMs in it.startMs..it.endMs }
+    else shown.indexOfFirst { playback.positionMs in it.startMs..it.endMs }
 
     Column(modifier = Modifier.fillMaxSize().brandGlow()) {
         LazyColumn(
@@ -111,6 +120,9 @@ fun ResultScreen(
             }
             item { MetricsRow(result) }
             item {
+                SearchField(query = query, onChange = { query = it })
+            }
+            item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -118,7 +130,7 @@ fun ResultScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Расшифровка",
+                        if (query.isBlank()) "Расшифровка" else "Найдено: ${shown.size}",
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
@@ -138,7 +150,7 @@ fun ResultScreen(
                     )
                 }
             }
-            itemsIndexed(result.replicas, key = { _, r -> "${r.startMs}-${r.speakerId}" }) { index, rep ->
+            itemsIndexed(shown, key = { _, r -> "${r.startMs}-${r.speakerId}" }) { index, rep ->
                 // Каскад: каждая реплика появляется с задержкой по индексу.
                 // На демо это читается как «система думает и выдаёт результат».
                 var visible by remember { mutableStateOf(false) }
@@ -434,3 +446,35 @@ private fun PlayerBar(playback: AudioPlayback, title: String) {
     }
 }
 
+
+
+/** Строка поиска по расшифровке. */
+@Composable
+private fun SearchField(query: String, onChange: (String) -> Unit) {
+    androidx.compose.material3.OutlinedTextField(
+        value = query,
+        onValueChange = onChange,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text("Поиск по тексту", style = MaterialTheme.typography.bodyMedium) },
+        leadingIcon = {
+            Icon(
+                Icons.Filled.Search,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Очистить",
+                    modifier = Modifier.size(18.dp).clickableNoRipple { onChange("") },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+    )
+}

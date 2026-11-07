@@ -12,8 +12,8 @@ android {
         applicationId = "ru.mifi.stenograf"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 5
+        versionName = "0.5.0"
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 

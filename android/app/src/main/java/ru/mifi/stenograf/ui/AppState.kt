@@ -49,6 +49,7 @@ class AppState(private val context: Context) : ViewModel() {
         private set
 
     init {
+        loadHistory()
         // Модели в APK могут обновиться (например, base -> small). Досыпаем
         // недостающие при старте, иначе приложение молча работает на старых.
         if (!modelsReady) installModels()
@@ -118,7 +119,9 @@ class AppState(private val context: Context) : ViewModel() {
                 // прослушать позже — исходный content:// может стать недоступен.
                 withContext(Dispatchers.IO) {
                     historyStore.save(
-                        title = displayName,
+                        // Имя из content-URI часто выглядит как «video:1000033217».
+                        // Для истории это бесполезно: подставляем дату и время.
+                        title = friendlyTitle(displayName),
                         audioUri = uri,
                         durationMs = res.durationMs,
                         processingMs = res.processingMs,
@@ -148,6 +151,19 @@ class AppState(private val context: Context) : ViewModel() {
     /** Старт обработки записанного в приложении файла. */
     fun startRecorded(file: java.io.File, speakers: Int?) {
         start(android.net.Uri.fromFile(file), file.name, speakers)
+    }
+
+    /**
+     * Человеческое имя записи: если исходное имя — технический хэш или
+     * «video:12345», используем дату и время. Обычные имена оставляем как есть.
+     */
+    private fun friendlyTitle(raw: String): String {
+        val looksTechnical = raw.length > 20 || raw.startsWith("video:") ||
+            raw.startsWith("audio:") || raw.all { it.isDigit() || it in ":-_" }
+        if (!looksTechnical) return raw
+        val now = java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale("ru"))
+            .format(java.util.Date())
+        return "Запись $now"
     }
 
     fun openHistory() {

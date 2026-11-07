@@ -27,6 +27,7 @@ import ru.mifi.stenograf.output.HexJson
 import ru.mifi.stenograf.ui.AppState
 import ru.mifi.stenograf.ui.ImportScreen
 import ru.mifi.stenograf.ui.CancelledScreen
+import ru.mifi.stenograf.ui.ErrorScreen
 import ru.mifi.stenograf.ui.HistoryScreen
 import ru.mifi.stenograf.ui.ProcessingScreen
 import ru.mifi.stenograf.ui.RecordScreen
@@ -129,6 +130,8 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
             onRecord = { state.goRecord() },
             onHistory = { state.openHistory() },
             onMenu = { showMenu = true },
+            recent = state.history.firstOrNull(),
+            onOpenRecent = { state.openFromHistory(it) },
         )
         Screen.RECORD -> RecordScreen(
             state = state,
@@ -142,14 +145,7 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
             onExportJson = { exportJson.launch("transcript.json") },
             onExportText = { exportText.launch("transcript.txt") },
         )
-        Screen.ERROR -> {
-            Box(Modifier.fillMaxSize().padding(20.dp)) {
-                Text(
-                    "Ошибка: ${state.error ?: "неизвестная"}\n\nВернитесь и попробуйте другой файл.",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
-        }
+        Screen.ERROR -> ErrorScreen(state)
     }
     }
 
