@@ -17,15 +17,17 @@ object ModelStore {
     const val LLM = "llm"
 
     /**
-     * Размер модели ASR. `small` даёт заметно меньше WER на русском, но
-     * занимает на 210 МБ больше и считает примерно в 2.5 раза дольше.
-     * Переключение — одно место: см. PREFERRED_ASR.
+     * Многоязычная модель Whisper. Нужна для английской речи: zipformer-ru
+     * английского не знает вовсе, а Whisper multilingual понимает оба языка
+     * и умеет сам определять язык по звуку.
+     *
+     * `base` — компромисс: int8-веса ~200 МБ, английский WER приемлем,
+     * русский остаётся за zipformer-ru (он точнее и в 3 раза быстрее).
      */
-    const val PREFERRED_ASR = "small"
+    const val PREFERRED_ASR = "base"
 
-    // Whisper оставляем только как запасной/эталон: base удалён, он хуже small
-    // по всем замерам и занимал 160 МБ в APK.
-    val ASR_VARIANTS = listOf("small")
+    /** Порядок важен: первый найденный вариант используется как запасной Whisper. */
+    val ASR_VARIANTS = listOf("base", "small")
 
     /**
      * Русская модель Vosk (Apache-2.0), портированная в sherpa-onnx.
@@ -60,9 +62,13 @@ object ModelStore {
     fun activeAsrVariant(context: Context): String {
         val dir = asrDir(context)
         val order = listOf(PREFERRED_ASR) + ASR_VARIANTS.filter { it != PREFERRED_ASR }
-        return order.firstOrNull { v ->
-            File(dir, encoderName(v)).exists() && File(dir, decoderName(v)).exists()
-        } ?: PREFERRED_ASR
+        return order.firstOrNull { v -> whisperFiles(dir, v).all { it.exists() } } ?: PREFERRED_ASR
+    }
+
+    /** Есть ли на устройстве хоть одна многоязычная модель Whisper (нужна для английского). */
+    fun hasWhisper(context: Context): Boolean {
+        val dir = asrDir(context)
+        return ASR_VARIANTS.any { v -> whisperFiles(dir, v).all { it.exists() } }
     }
 
     const val SEGMENTATION = "segmentation-3.0.onnx"
@@ -79,7 +85,7 @@ object ModelStore {
         val asr = asrDir(context)
         // Достаточно любой рабочей ASR-модели: русской или Whisper.
         val asrOk = RU_MODEL.files(asr).all { it.exists() } ||
-            whisperFiles(asr, PREFERRED_ASR).all { it.exists() }
+            ASR_VARIANTS.any { whisperFiles(asr, it).all { f -> f.exists() } }
         return asrOk &&
             File(diarDir(context), SEGMENTATION).exists() &&
             File(diarDir(context), EMBEDDING).exists()

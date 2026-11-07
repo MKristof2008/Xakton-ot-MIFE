@@ -80,4 +80,17 @@ class TextQualityTest {
     fun `мусор из одиночных латинских букв убирается`() {
         assertFalse(Grammar.polish("P P.").any { it in 'A'..'Z' || it in 'a'..'z' })
     }
+
+    @Test
+    fun `английский текст не чистится русскими правилами`() {
+        // В английском «I» — местоимение, а не мусор декодера.
+        val out = Grammar.polish("i think we should ship it friday", russian = false)
+        assertEquals("I think we should ship it friday.", out)
+    }
+
+    @Test
+    fun `английский не получает запятых перед союзами`() {
+        val out = Grammar.polish("we shipped it but the tests failed", russian = false)
+        assertEquals("We shipped it but the tests failed.", out)
+    }
 }

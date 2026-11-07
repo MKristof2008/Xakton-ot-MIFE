@@ -22,6 +22,9 @@ enum class Screen { IMPORT, RECORD, PROCESSING, RESULT, HISTORY, CANCELLED, ERRO
 
 class AppState(private val context: Context) : ViewModel() {
 
+    /** Те же SharedPreferences, что и в меню: язык выбирается в настройках. */
+    private val settings = ru.mifi.stenograf.settings.SettingsStore(context)
+
     var screen by mutableStateOf(Screen.IMPORT)
         private set
     var progress by mutableStateOf(PipelineProgress(ru.mifi.stenograf.pipeline.Stage.DECODE, 0f, 0f))
@@ -99,6 +102,7 @@ class AppState(private val context: Context) : ViewModel() {
                     TranscriptPipeline(context).run(
                         uri = uri,
                         numSpeakers = speakers,
+                        language = settings.language,
                         onProgress = { p -> progress = p },
                         isCancelled = { cancelled },
                     )

@@ -230,6 +230,28 @@ private fun SettingsSection(settings: SettingsStore, state: AppState) {
         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
     )
 
+    SectionLabel("Распознавание")
+    OptionRow(
+        title = "Язык записи",
+        options = ru.mifi.stenograf.asr.RecognitionLanguage.entries.map { it.label },
+        selectedIndex = ru.mifi.stenograf.asr.RecognitionLanguage.entries.indexOf(settings.language)
+            .coerceAtLeast(0),
+    ) { idx ->
+        settings.language = ru.mifi.stenograf.asr.RecognitionLanguage.entries[idx]
+    }
+    Text(
+        "Авто определяет язык по началу записи: русский идёт на zipformer-ru, " +
+            "остальные — на многоязычный Whisper. Всё на устройстве.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 12.dp),
+    )
+
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 8.dp),
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+    )
+
     SectionLabel("Текст")
     ToggleRow(
         title = "Пунктуация и регистр",
@@ -330,7 +352,7 @@ private fun OptionRow(
 private fun AboutSection() {
     val rows = listOf(
         "Версия" to "0.5.0",
-        "Распознавание" to "zipformer-ru (Vosk model-ru)",
+        "Распознавание" to "zipformer-ru + Whisper base (мультиязычная)",
         "Диаризация" to "pyannote segmentation-3.0 + 3D-Speaker",
         "Рантайм" to "sherpa-onnx 2.0.1",
         "Сеть" to "не используется — нет разрешения INTERNET",

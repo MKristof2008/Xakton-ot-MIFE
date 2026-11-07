@@ -21,19 +21,23 @@ cp "$M/decoder.onnx"      "$ASSETS/asr/ru-zipformer-decoder.onnx"
 cp "$M/joiner.int8.onnx"  "$ASSETS/asr/ru-zipformer-joiner.int8.onnx"
 cp "$M/tokens.txt"        "$ASSETS/asr/ru-zipformer-tokens.txt"
 
-echo "[2/3] pyannote segmentation-3.0"
+echo "[2/4] Многоязычный Whisper base — английская речь"
+# Zipformer-ru английского не понимает вовсе, а Whisper multilingual знает
+# и русский, и английский (и ещё ~90 языков) и умеет сам определять язык.
+# int8: 29 МБ энкодер + 130 МБ декодер.
+get "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2" ws-base.tar.bz2
+[ -d sherpa-onnx-whisper-base ] || tar -xjf ws-base.tar.bz2
+cp sherpa-onnx-whisper-base/base-encoder.int8.onnx "$ASSETS/asr/whisper-base-encoder.int8.onnx"
+cp sherpa-onnx-whisper-base/base-decoder.int8.onnx "$ASSETS/asr/whisper-base-decoder.int8.onnx"
+cp sherpa-onnx-whisper-base/base-tokens.txt        "$ASSETS/asr/whisper-base-tokens.txt"
+
+echo "[3/4] pyannote segmentation-3.0"
 get "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2" seg.tar.bz2
 [ -d sherpa-onnx-pyannote-segmentation-3-0 ] || tar -xjf seg.tar.bz2
 cp sherpa-onnx-pyannote-segmentation-3-0/model.onnx "$ASSETS/diar/segmentation-3.0.onnx"
 
-echo "[3/3] Эмбеддинги говорящего (3D-Speaker ERes2Net)"
+echo "[4/4] Эмбеддинги говорящего (3D-Speaker ERes2Net)"
 get "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx" emb.onnx
 cp emb.onnx "$ASSETS/diar/3dspeaker_eres2net.onnx"
 
 echo "Готово:"; ls -la "$ASSETS/asr" "$ASSETS/diar"
-cat <<'TIP'
-
-Опционально — Whisper small как запасной движок и эталон для сравнения:
-  ./scripts/fetch_whisper.sh
-(добавит 374 МБ к APK; без него приложение работает на русской модели)
-TIP

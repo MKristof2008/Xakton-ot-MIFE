@@ -2,6 +2,7 @@ package ru.mifi.stenograf.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import ru.mifi.stenograf.asr.RecognitionLanguage
 
 /**
  * Пользовательские настройки. Хранятся в SharedPreferences — переживают
@@ -19,6 +20,7 @@ class SettingsStore(context: Context) {
         const val KEY_PUNCTUATION = "punctuation"
         const val KEY_SHOW_TIMECODES = "show_timecodes"
         const val KEY_HISTORY_LIMIT = "history_limit"
+        const val KEY_LANGUAGE = "recognition_language"
 
         val HISTORY_LIMITS = listOf(10, 30, 50)
     }
@@ -50,4 +52,12 @@ class SettingsStore(context: Context) {
     var historyLimit: Int
         get() = prefs.getInt(KEY_HISTORY_LIMIT, 30)
         set(v) = prefs.edit().putInt(KEY_HISTORY_LIMIT, v).apply()
+
+    /**
+     * Язык распознавания. По умолчанию авто: язык определяется по записи,
+     * русский идёт на zipformer-ru, остальные — на многоязычный Whisper.
+     */
+    var language: RecognitionLanguage
+        get() = RecognitionLanguage.fromKey(prefs.getString(KEY_LANGUAGE, null))
+        set(v) = prefs.edit().putString(KEY_LANGUAGE, v.key).apply()
 }

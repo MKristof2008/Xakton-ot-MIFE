@@ -23,3 +23,7 @@ android/build/
 android/app/build/
 android/local.properties
 android/.cxx/.coverage
+# Пароли подписи release-APK — только локально.
+android/keystore.properties
+*.jks
+*.keystore

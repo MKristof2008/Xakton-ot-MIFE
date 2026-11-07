@@ -4,7 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import ru.mifi.stenograf.asr.AsrEngine
-import ru.mifi.stenograf.asr.EngineSelector
+import ru.mifi.stenograf.asr.LanguageRouter
+import ru.mifi.stenograf.asr.RecognitionLanguage
 import ru.mifi.stenograf.audio.AudioDecoder
 import ru.mifi.stenograf.audio.Denoise
 import ru.mifi.stenograf.diar.Diarizer
@@ -95,7 +96,8 @@ class TranscriptPipeline(private val context: Context) {
     fun run(
         uri: Uri,
         numSpeakers: Int?,
-        engineKind: AsrEngine.EngineKind = EngineSelector.resolve(AsrEngine.availableEngines(context)),
+        engineKind: AsrEngine.EngineKind? = null,
+        language: RecognitionLanguage = RecognitionLanguage.AUTO,
         onProgress: (PipelineProgress) -> Unit = {},
         isCancelled: () -> Boolean = { false },
     ): TranscriptResult {
@@ -164,7 +166,21 @@ class TranscriptPipeline(private val context: Context) {
         report(Stage.ASR, 0f, "Распознаём речь (${utterances.size} реплик)")
         t = System.currentTimeMillis()
         val recognized = mutableListOf<Pair<SpeakerTurn, List<AsrSegment>>>()
-        val engine = AsrEngine(context, engineKind)
+        val available = AsrEngine.availableEngines(context)
+        // Язык выбирается один раз на запись: см. LanguageRouter.
+        val plan = LanguageRouter.plan(
+            choice = language,
+            samples = pcm.samples,
+            hasRussianModel = AsrEngine.EngineKind.RU_TRANSDUCER in available,
+            hasWhisper = AsrEngine.EngineKind.WHISPER_SMALL in available,
+            detect = { head -> AsrEngine.detectLanguage(context, head) },
+        )
+        val chosen = engineKind ?: plan.engine
+        Log.i(TAG, "ASR plan: engine=$chosen language='${plan.language}' detected=${plan.detectedLabel}")
+        if (plan.detectedLabel != null) {
+            report(Stage.ASR, 0f, "Язык записи: ${plan.detectedLabel}")
+        }
+        val engine = AsrEngine(context, chosen, plan.language)
         try {
             var processedMs = 0L
             val totalMs = utterances.sumOf { (it.endMs - it.startMs).toLong() }.coerceAtLeast(1)
@@ -220,8 +236,19 @@ class TranscriptPipeline(private val context: Context) {
         // 6. Локальная LLM: пунктуация и регистр, без перефразирования
         report(Stage.LLM, 0f, "Обрабатываем текст локальной моделью")
         t = System.currentTimeMillis()
-        replicas = LlmPost(context).polish(replicas) { f ->
-            report(Stage.LLM, f, "Обрабатываем текст локальной моделью")
+        // Не-русский текст идёт мимо LlmPost: русские правила выкидывают одиночное
+        // «I» как мусор декодера и ставят запятые перед «а»/«что». Для английского
+        // остаются только безопасные шаги Grammar — слова не теряются.
+        val russianText = plan.language.isEmpty() || plan.language.startsWith("ru")
+        replicas = if (russianText) {
+            LlmPost(context).polish(replicas) { f ->
+                report(Stage.LLM, f, "Обрабатываем текст локальной моделью")
+            }
+        } else {
+            report(Stage.LLM, 1f, "Приводим текст в порядок")
+            replicas.map {
+                it.copy(text = ru.mifi.stenograf.llm.Grammar.polish(it.text, russian = false))
+            }
         }
         stagesMs[Stage.LLM] = System.currentTimeMillis() - t
         Log.i(TAG, "stage LLM done in ${stagesMs[Stage.LLM]} ms")
