@@ -6,3 +6,7 @@ diarization,sherpa-pyannote3.0+3dspeaker,onnx f32,4,no,no,SM-S938B,dialog_2spk,7
 llm,qwen2.5-0.5b-instruct,q4_k_m,6,no,yes,SM-S938B,llm-samples-4,0,4178,-,0.0000,-,-,469,"WER до/после пунктуации = 0.0000: слова не меняются; ~1 с на реплику"
 asr,whisper-small,ggml f16,6,no,no,SM-S938B,voxforge-ru-20,203250,162322,0.799,0.1702,-,-,465,"RelWithDebInfo; ВЫБРАНА: лучший WER. RTF завышен: whisper паддит каждый файл до 30 с"
 asr,whisper-small,ggml f16,6,no,no,SM-S938B,dialog_2spk,79825,27894,0.349,-,-,-,465,"тот же движок на записи 80 с: RTF 0.35, реальный сценарий"
+asr,whisper-small-q5_1,ggml q5_1,6,no,no,SM-S938B,voxforge-ru-20,203250,129705,0.638,0.1780,-,-,181,"ВЫБРАНА: 181 МБ вместо 465 при WER 0.170->0.178; замена полной small"
+asr,whisper-small-q5_1,ggml q5_1,6,no,no,SM-S938B,dialog_2spk,79825,24923,0.312,-,-,-,181,"тот же движок на диалоге 80 с: RTF 0.31"
+pipeline,whisper-small-q5_1+diar+qwen-q4,ggml q5_1+onnx+q4,6,no,yes,SM-S938B,user_voice_54s,54000,39667,0.735,-,-,873,181,"реальная запись пользователя: 10 реплик, без падения по памяти"
+pipeline,whisper-small-q5_1+diar+qwen-q4,ggml q5_1+onnx+q4,6,no,yes,SM-S938B,user_long,159000,93234,0.586,-,-,872,181,"длинная запись: 6 реплик, пик ОЗУ 872 МБ, модели выгружаются между этапами"
