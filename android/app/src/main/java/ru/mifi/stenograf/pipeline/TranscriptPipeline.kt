@@ -98,6 +98,8 @@ class TranscriptPipeline(private val context: Context) {
         numSpeakers: Int?,
         engineKind: AsrEngine.EngineKind? = null,
         language: RecognitionLanguage = RecognitionLanguage.AUTO,
+        /** Восстанавливать пунктуацию и регистр (настройка «Пунктуация и регистр»). */
+        punctuation: Boolean = true,
         onProgress: (PipelineProgress) -> Unit = {},
         isCancelled: () -> Boolean = { false },
     ): TranscriptResult {
@@ -240,14 +242,21 @@ class TranscriptPipeline(private val context: Context) {
         // «I» как мусор декодера и ставят запятые перед «а»/«что». Для английского
         // остаются только безопасные шаги Grammar — слова не теряются.
         val russianText = plan.language.isEmpty() || plan.language.startsWith("ru")
-        replicas = if (russianText) {
-            LlmPost(context).polish(replicas) { f ->
+        // Настройка «Пунктуация и регистр»: выключена — отдаём текст как распознал
+        // ASR, без точек, запятых и заглавных. Раньше тумблер ни на что не влиял.
+        replicas = when {
+            !punctuation -> {
+                report(Stage.LLM, 1f, "Без пунктуации")
+                replicas
+            }
+            russianText -> LlmPost(context).polish(replicas) { f ->
                 report(Stage.LLM, f, "Обрабатываем текст локальной моделью")
             }
-        } else {
-            report(Stage.LLM, 1f, "Приводим текст в порядок")
-            replicas.map {
-                it.copy(text = ru.mifi.stenograf.llm.Grammar.polish(it.text, russian = false))
+            else -> {
+                report(Stage.LLM, 1f, "Приводим текст в порядок")
+                replicas.map {
+                    it.copy(text = ru.mifi.stenograf.llm.Grammar.polish(it.text, russian = false))
+                }
             }
         }
         stagesMs[Stage.LLM] = System.currentTimeMillis() - t

@@ -78,33 +78,37 @@ class Diarizer(
         )
 
         val sd = OfflineSpeakerDiarization(config = config)
-        try {
+        val turns = try {
             // processWithCallback НЕ используем: JNI-обвязка sherpa-onnx ищет в
             // переданном объекте метод invoke(IIJ)Ljava/lang/Integer;, а Kotlin-лямбда
             // компилируется в invoke(Object,Object,Object)Object -> NoSuchMethodError,
             // JNI abort и аварийное завершение процесса. См. tombstone 2026-11-07.
             onProgress(0.05f)
-            val raw = sd.process(samples)
-            onProgress(0.7f)
-            val turns = raw.map { s ->
+            sd.process(samples).map { s ->
                 SpeakerTurn(
                     startMs = (s.start * 1000).toInt(),
                     endMs = (s.end * 1000).toInt(),
                     speakerRaw = "raw_${s.speaker}",
                 )
             }.filter { it.endMs > it.startMs }
-
-            // Постобработка: склеиваем кластеры одного голоса.
-            // Основная кластеризация работает по отдельным окнам и на коротких
-            // репликах ошибается — один человек разъезжается на 2–5 кластеров.
-            // Схожесть центроидов решает это точно: у одного голоса она 0.70–0.78,
-            // у разных людей 0.31–0.48.
-            val refined = if (numSpeakers != null) turns else mergeSameVoices(turns, samples)
-            onProgress(1f)
-            return refined
         } finally {
+            // Освобождаем диарайзер ДО постобработки. У него внутри свои
+            // сегментация + эмбеддинги (~44 МБ весов + рабочая память); если
+            // держать их и одновременно поднимать второй экстрактор для
+            // центроидов, на телефоне процесс убивает LMK — проверено на
+            // устройстве, 11.2026.
             sd.release()
         }
+        onProgress(0.7f)
+
+        // Постобработка: склеиваем кластеры одного голоса.
+        // Основная кластеризация работает по отдельным окнам и на коротких
+        // репликах ошибается — один человек разъезжается на 2–5 кластеров.
+        // Схожесть центроидов решает это точно: у одного голоса она 0.70–0.78,
+        // у разных людей 0.31–0.48.
+        val refined = if (numSpeakers != null) turns else mergeSameVoices(turns, samples)
+        onProgress(1f)
+        return refined
     }
 
     /**
@@ -125,9 +129,13 @@ class Diarizer(
     private fun mergeSameVoices(turns: List<SpeakerTurn>, samples: FloatArray): List<SpeakerTurn> {
         if (turns.size < 2) return turns
 
+        // assetManager обязан быть null: модель лежит абсолютным путём в filesDir.
+        // Если передать assets, sherpa-onnx пытается открыть путь как имя ассета
+        // и падает в нативном коде (EXIT_SELF, status=255) — воспроизведено
+        // на устройстве.
         val ex = runCatching {
             SpeakerEmbeddingExtractor(
-                assetManager = appContext.assets,
+                assetManager = null,
                 config = SpeakerEmbeddingExtractorConfig(
                     model = embeddingPath(),
                     numThreads = threads,

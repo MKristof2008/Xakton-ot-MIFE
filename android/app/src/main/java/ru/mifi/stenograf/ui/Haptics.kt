@@ -14,6 +14,16 @@ import android.os.VibratorManager
  */
 object Haptics {
 
+    /**
+     * Переключатель из настроек. Раньше тумблер «Вибрация при нажатиях»
+     * сохранялся, но ни на что не влиял: Haptics его не читал и всегда
+     * вибрировал. Теперь настройка проверяется здесь — одна точка,
+     * все вызовы [tap]/[confirm]/[success]/[warn] её уважают.
+     */
+    private fun enabled(context: Context): Boolean =
+        runCatching { ru.mifi.stenograf.settings.SettingsStore(context).haptics }
+            .getOrDefault(true)
+
     private fun vibrator(context: Context): Vibrator? = runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -37,6 +47,7 @@ object Haptics {
     fun warn(context: Context) = pattern(context, longArrayOf(0, 14, 50, 14), intArrayOf(0, 160, 0, 160))
 
     private fun oneShot(context: Context, ms: Long, amplitude: Int) {
+        if (!enabled(context)) return
         val v = vibrator(context) ?: return
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -49,6 +60,7 @@ object Haptics {
     }
 
     private fun pattern(context: Context, timings: LongArray, amplitudes: IntArray) {
+        if (!enabled(context)) return
         val v = vibrator(context) ?: return
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

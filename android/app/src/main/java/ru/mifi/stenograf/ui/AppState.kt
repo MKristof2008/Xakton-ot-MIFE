@@ -103,6 +103,7 @@ class AppState(private val context: Context) : ViewModel() {
                         uri = uri,
                         numSpeakers = speakers,
                         language = settings.language,
+                        punctuation = settings.punctuation,
                         onProgress = { p -> progress = p },
                         isCancelled = { cancelled },
                     )
