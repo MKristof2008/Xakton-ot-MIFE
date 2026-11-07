@@ -37,6 +37,10 @@ android {
             }
         }
         release {
+            // Минификация выключена намеренно: APK на 99% состоит из моделей,
+            // а R8 — лишний риск сломать JNI и sherpa-onnx ради единиц
+            // процентов размера. Заглушек в APK нет по построению: они
+            // вынесены в тестовый набор (app/src/test).
             isMinifyEnabled = false
             // Debug-ключом, чтобы APK ставился без отдельной подписи (как в main)
             signingConfig = signingConfigs.getByName("debug")
@@ -65,6 +69,12 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Инструментальные тесты — на debug. Тестовый APK под R8 требует
+    // отдельного набора исключений для androidx.test и kotlin stdlib,
+    // а проверяет он не то, что нужно: release проверяется установкой
+    // и запуском на устройстве (R8 вырезает Stubs, JNI должен остаться).
+    testBuildType = "debug"
 
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
@@ -113,4 +123,5 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
 }
