@@ -17,6 +17,25 @@ object LanguageRouter {
     /** Сколько звука отдаём на определение языка. Язык записи не меняется, больше не нужно. */
     private const val DETECT_MS = 20_000
 
+    /**
+     * Ниже этого среднего уровня сигнала запись считаем тишиной.
+     * 0.005 ≈ −46 dBFS: тише — фоновый шум, а не речь. Детектор языка
+     * на таком фрагменте выдаёт случайный код.
+     */
+    private const val SILENCE_RMS = 0.005
+
+    /** Языки, которые мы реально поддерживаем в интерфейсе и ожидаем услышать. */
+    private val KNOWN_LANGUAGES = setOf(
+        "ru", "en", "de", "fr", "es", "it", "pt", "zh", "ja", "ko", "uk", "kk", "tr", "pl",
+    )
+
+    private fun rms(samples: FloatArray): Double {
+        if (samples.isEmpty()) return 0.0
+        var sum = 0.0
+        for (s in samples) sum += s.toDouble() * s
+        return kotlin.math.sqrt(sum / samples.size)
+    }
+
     data class Plan(
         val engine: AsrEngine.EngineKind,
         /** ISO-код для Whisper; пустая строка — автоопределение самой моделью. */
@@ -57,11 +76,19 @@ object LanguageRouter {
             RecognitionLanguage.AUTO -> {
                 // Определять нечем — ведём себя как до появления английского.
                 if (!hasWhisper || samples.isEmpty()) return russian()
+                // На тишине и в шуме детектор выдаёт случайный язык (наблюдали
+                // «nn» — нюнорск на записи без речи). Проверяем, есть ли вообще
+                // звук: если тихо, язык определять не по чему — остаёмся на русском.
+                if (rms(samples) < SILENCE_RMS) return russian()
                 val head = samples.copyOfRange(0, minOf(samples.size, DETECT_MS * 16))
                 val code = detect(head)
                 when {
                     code.isNullOrBlank() -> russian()
                     code.startsWith("ru") -> russian(displayName(code))
+                    // Языки, для которых у нас нет ожиданий, чаще всего означают
+                    // ошибку детектора на коротком/шумном фрагменте. Русский —
+                    // безопасный дефолт: движение к нему не портит русский текст.
+                    code !in KNOWN_LANGUAGES -> russian()
                     else -> whisper(code, displayName(code))
                 }
             }

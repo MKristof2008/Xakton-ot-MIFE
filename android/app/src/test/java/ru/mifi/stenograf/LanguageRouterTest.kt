@@ -15,8 +15,12 @@ class LanguageRouterTest {
     private val both = listOf(AsrEngine.EngineKind.RU_TRANSDUCER, AsrEngine.EngineKind.WHISPER_SMALL)
     private val ruOnly = listOf(AsrEngine.EngineKind.RU_TRANSDUCER)
 
-    /** Полсекунды тишины: содержимое для логики не важно, важна длина. */
-    private val samples = FloatArray(16_000 / 2)
+    /**
+ * Полсекунды сигнала с речевым уровнем (−20 dBFS). Именно не тишина:
+ * на тишине роутер намеренно не доверяет детектору языка и остаётся
+ * на русском — это отдельный тест ниже.
+ */
+    private val samples = FloatArray(16_000 / 2) { 0.1f }
 
     private fun plan(
         choice: RecognitionLanguage,
@@ -71,6 +75,29 @@ class LanguageRouterTest {
         val p = plan(RecognitionLanguage.EN, available = ruOnly)
         assertEquals(AsrEngine.EngineKind.RU_TRANSDUCER, p.engine)
         assertEquals("нет модели EN", p.detectedLabel)
+    }
+
+    @Test
+    fun `на тишине детектор не используется`() {
+        // На тишине Whisper выдавал «nn» (нюнорск) и переключал движок,
+        // хотя речи нет вовсе.
+        var called = false
+        val silent = FloatArray(16_000)
+        val p = LanguageRouter.plan(
+            choice = RecognitionLanguage.AUTO,
+            samples = silent,
+            hasRussianModel = true,
+            hasWhisper = true,
+            detect = { called = true; "nn" },
+        )
+        assertEquals(false, called)
+        assertEquals(AsrEngine.EngineKind.RU_TRANSDUCER, p.engine)
+    }
+
+    @Test
+    fun `неизвестный язык не переключает движок`() {
+        val p = plan(RecognitionLanguage.AUTO, detected = "nn")
+        assertEquals(AsrEngine.EngineKind.RU_TRANSDUCER, p.engine)
     }
 
     @Test
