@@ -16,7 +16,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -68,12 +71,15 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 }
 
 @Composable
 private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
     val context = LocalContext.current
     val state = remember { AppState(context) }
+    val settings = remember { ru.mifi.stenograf.settings.SettingsStore(context) }
+    var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     // Автозапуск обработки при отладочном intent — ускоряет прогоны с ПК.
     // remember(uri) обязателен: без ключа повторная доставка intent-а
@@ -122,6 +128,7 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
             onPickFile = { uri: Uri, name: String, speakers: Int? -> state.start(uri, name, speakers) },
             onRecord = { state.goRecord() },
             onHistory = { state.openHistory() },
+            onMenu = { showMenu = true },
         )
         Screen.RECORD -> RecordScreen(
             state = state,
@@ -143,6 +150,30 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
                 )
             }
         }
+    }
+    }
+
+    if (showMenu) {
+        ru.mifi.stenograf.ui.MenuSheet(
+            state = state,
+            settings = settings,
+            onDismiss = { showMenu = false },
+            onOpenHistory = {
+                showMenu = false
+                state.openHistory()
+            },
+        )
+
+    if (showMenu) {
+        ru.mifi.stenograf.ui.MenuSheet(
+            state = state,
+            settings = settings,
+            onDismiss = { showMenu = false },
+            onOpenHistory = {
+                showMenu = false
+                state.openHistory()
+            },
+        )
     }
     }
 }

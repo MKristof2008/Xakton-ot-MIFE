@@ -3,6 +3,9 @@ package ru.mifi.stenograf.ui
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -58,6 +62,7 @@ fun ImportScreen(
     onPickFile: (Uri, String, Int?) -> Unit,
     onRecord: () -> Unit = {},
     onHistory: () -> Unit = {},
+    onMenu: () -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var speakersAuto by remember { mutableStateOf(true) }
@@ -83,8 +88,30 @@ fun ImportScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Spacer(Modifier.height(8.dp))
-        HeroHeader()
-        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.Top) {
+            Box(Modifier.weight(1f)) { HeroHeader() }
+            // Меню справа сверху: история, настройки, о приложении.
+            // Всё «служебное» убрано сюда, чтобы главный экран был про одно действие.
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .clickableNoRipple {
+                        Haptics.tap(context)
+                        onMenu()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.MoreVert,
+                    contentDescription = "Меню",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
 
         ImportCard(
             onPick = {
@@ -104,38 +131,7 @@ fun ImportScreen(
 
         ModelsCard(state)
 
-        OutlinedButton(
-            onClick = {
-                Haptics.tap(context)
-                onHistory()
-            },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Icon(Icons.Filled.History, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("История расшифровок", style = MaterialTheme.typography.labelLarge)
-        }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                Icons.Filled.Lock,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(14.dp),
-            )
-            Text(
-                "Обработка на устройстве. Приложение не имеет доступа в интернет.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         Spacer(Modifier.height(20.dp))
     }
 }
@@ -172,57 +168,100 @@ private fun HeroHeader() {
                 )
             }
         }
-        Text(
-            "Расшифровка встреч с разделением говорящих и таймкодами. " +
-                "Всё считается на телефоне, без сети.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+
     }
 }
 
 @Composable
 private fun ImportCard(onPick: () -> Unit, onRecord: () -> Unit) {
-    Card(
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Две крупные плитки вместо кнопок: зона нажатия — вся карточка,
+    // а не узкая полоска. На демо это первое, куда попадает палец.
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            WaveBars(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp),
-                barCount = 13,
-                color = MaterialTheme.colorScheme.primary,
+        ActionTile(
+            modifier = Modifier.weight(1f),
+            icon = Icons.Filled.Upload,
+            title = "Файл",
+            subtitle = "mp3, wav, видео",
+            gradient = BrandGradient,
+            onClick = {
+                Haptics.confirm(context)
+                onPick()
+            },
+        )
+        ActionTile(
+            modifier = Modifier.weight(1f),
+            icon = Icons.Filled.Mic,
+            title = "Голос",
+            subtitle = "записать сейчас",
+            gradient = AccentGradient,
+            onClick = {
+                Haptics.confirm(context)
+                onRecord()
+            },
+        )
+    }
+}
+
+/**
+ * Крупная интерактивная плитка: иконка в градиентном круге, название,
+ * подпись. Вся площадь кликабельна, есть визуальный отклик на нажатие.
+ */
+@Composable
+private fun ActionTile(
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    gradient: List<Color>,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = 900f),
+        label = "tileScale",
+    )
+
+    Column(
+        modifier = modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(
+                interactionSource = interaction,
+                indication = androidx.compose.foundation.LocalIndication.current,
+                onClick = onClick,
             )
-            Button(
-                onClick = onPick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            ) {
-                Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Выбрать запись", style = MaterialTheme.typography.labelLarge)
-            }
-            OutlinedButton(
-                onClick = onRecord,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Записать голос", style = MaterialTheme.typography.labelLarge)
-            }
-            Text(
-                "mp3 · wav · m4a · ogg · flac и видеофайлы — конвертация встроенная",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            .padding(vertical = 20.dp, horizontal = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Brush.linearGradient(gradient)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(26.dp),
             )
         }
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(
+            subtitle,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -275,12 +314,7 @@ private fun SpeakersCard(
                     }
                 }
             }
-            Text(
-                if (auto) "Число определится автоматически. На 4+ говорящих точность ниже — лучше указать вручную."
-                else "Точное число заметно повышает качество разделения.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
         }
     }
 }
