@@ -194,12 +194,24 @@ private fun MenuRow(
 private fun SettingsSection(settings: SettingsStore, state: AppState) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    // SharedPreferences не умеет уведомлять Compose: геттер возвращает новое
+    // значение, но рекомпозиции нет, и переключатель «залипал» до перезахода
+    // в меню. Держим локальную копию в Compose-состоянии и пишем в prefs
+    // при каждом изменении — тогда и анимация Switch, и выбор языка видны сразу.
+    var haptics by remember { mutableStateOf(settings.haptics) }
+    var keepAudio by remember { mutableStateOf(settings.keepAudio) }
+    var historyLimit by remember { mutableStateOf(settings.historyLimit) }
+    var language by remember { mutableStateOf(settings.language) }
+    var punctuation by remember { mutableStateOf(settings.punctuation) }
+    var showTimecodes by remember { mutableStateOf(settings.showTimecodes) }
+
     SectionLabel("Звук и отклик")
     ToggleRow(
         title = "Вибрация при нажатиях",
         subtitle = "короткий отклик на кнопки и готовность",
-        checked = settings.haptics,
+        checked = haptics,
     ) { on ->
+        haptics = on
         settings.haptics = on
         if (on) Haptics.tap(context)
     }
@@ -213,16 +225,19 @@ private fun SettingsSection(settings: SettingsStore, state: AppState) {
     ToggleRow(
         title = "Хранить аудио в истории",
         subtitle = "без этого запись нельзя будет прослушать. ~1.9 МБ на минуту",
-        checked = settings.keepAudio,
-    ) { settings.keepAudio = it }
+        checked = keepAudio,
+    ) {
+        keepAudio = it
+        settings.keepAudio = it
+    }
 
     OptionRow(
         title = "Сколько записей держать",
         options = SettingsStore.HISTORY_LIMITS.map { it.toString() },
-        selectedIndex = SettingsStore.HISTORY_LIMITS.indexOf(settings.historyLimit)
-            .coerceAtLeast(0),
+        selectedIndex = SettingsStore.HISTORY_LIMITS.indexOf(historyLimit).coerceAtLeast(0),
     ) { idx ->
-        settings.historyLimit = SettingsStore.HISTORY_LIMITS[idx]
+        historyLimit = SettingsStore.HISTORY_LIMITS[idx]
+        settings.historyLimit = historyLimit
     }
 
     HorizontalDivider(
@@ -234,10 +249,11 @@ private fun SettingsSection(settings: SettingsStore, state: AppState) {
     OptionRow(
         title = "Язык записи",
         options = ru.mifi.stenograf.asr.RecognitionLanguage.entries.map { it.label },
-        selectedIndex = ru.mifi.stenograf.asr.RecognitionLanguage.entries.indexOf(settings.language)
+        selectedIndex = ru.mifi.stenograf.asr.RecognitionLanguage.entries.indexOf(language)
             .coerceAtLeast(0),
     ) { idx ->
-        settings.language = ru.mifi.stenograf.asr.RecognitionLanguage.entries[idx]
+        language = ru.mifi.stenograf.asr.RecognitionLanguage.entries[idx]
+        settings.language = language
     }
     Text(
         "Авто определяет язык по началу записи: русский идёт на zipformer-ru, " +
@@ -256,14 +272,20 @@ private fun SettingsSection(settings: SettingsStore, state: AppState) {
     ToggleRow(
         title = "Пунктуация и регистр",
         subtitle = "расставлять точки, запятые и заглавные буквы",
-        checked = settings.punctuation,
-    ) { settings.punctuation = it }
+        checked = punctuation,
+    ) {
+        punctuation = it
+        settings.punctuation = it
+    }
 
     ToggleRow(
         title = "Показывать таймкоды",
         subtitle = "по умолчанию на экране результата",
-        checked = settings.showTimecodes,
-    ) { settings.showTimecodes = it }
+        checked = showTimecodes,
+    ) {
+        showTimecodes = it
+        settings.showTimecodes = it
+    }
 }
 
 @Composable
