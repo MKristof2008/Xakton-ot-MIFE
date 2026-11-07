@@ -373,7 +373,7 @@ private fun OptionRow(
 @Composable
 private fun AboutSection() {
     val rows = listOf(
-        "Версия" to "0.5.0",
+        "Версия" to ru.mifi.stenograf.BuildConfig.VERSION_NAME,
         "Распознавание" to "zipformer-ru + Whisper base (мультиязычная)",
         "Диаризация" to "pyannote segmentation-3.0 + 3D-Speaker",
         "Рантайм" to "sherpa-onnx 2.0.1",
