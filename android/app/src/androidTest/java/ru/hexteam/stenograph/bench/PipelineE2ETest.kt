@@ -37,7 +37,10 @@ class PipelineE2ETest {
 
     @Test
     fun fullPipeline(): Unit = runBlocking {
-        val pipeline = EnginesFactory.create(context)
+        val modelName = InstrumentationRegistry.getArguments()
+            .getString("model") ?: "ggml-small.bin"
+        val pipeline = EnginesFactory.create(context, asrModel = "models/$modelName")
+        Log.i("E2E", "модель ASR: $modelName")
         val stages = mutableListOf<PipelineStage>()
 
         val started = System.currentTimeMillis()

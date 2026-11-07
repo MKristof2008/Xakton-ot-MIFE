@@ -1,6 +1,8 @@
 config,model,quant,threads,denoise,llm,device,file,audio_ms,inference_ms,rtf,wer,der,ram_mb,model_size_mb,notes
-asr,whisper-tiny,ggml f16,6,no,no,SM-S938B,voxforge-ru-20,203250,20268,0.100,0.3676,-,-,74,"Release-сборка; среднее WER по 20 записям VoxForge RU"
-asr,whisper-base,ggml f16,6,no,no,SM-S938B,voxforge-ru-20,203250,42259,0.208,0.2454,-,-,141,"Release-сборка; выбран как рабочая модель (WER -12 п.п. против tiny)"
+asr,whisper-tiny,ggml f16,6,no,no,SM-S938B,voxforge-ru-20,203250,20268,0.100,0.3676,-,-,74,"Debug; среднее WER по 20 записям VoxForge RU"
+asr,whisper-base,ggml f16,6,no,no,SM-S938B,voxforge-ru-20,203250,45621,0.224,0.2454,-,-,141,"RelWithDebInfo; WER -12 п.п. против tiny, но проигрывает small"
 diarization,sherpa-pyannote3.0+3dspeaker,onnx f32,4,no,no,SM-S938B,dialog_2spk,79825,13550,0.170,-,0.082,-,44,"порог кластеризации 0.7; DER с допуском 250 мс и выравниванием меток"
 diarization,sherpa-pyannote3.0+3dspeaker,onnx f32,4,no,no,SM-S938B,dialog_2spk,79825,17276,0.216,-,0.082,-,44,"2 говорящих заданы явно; та же точность, DER 0.082"
 llm,qwen2.5-0.5b-instruct,q4_k_m,6,no,yes,SM-S938B,llm-samples-4,0,4178,-,0.0000,-,-,469,"WER до/после пунктуации = 0.0000: слова не меняются; ~1 с на реплику"
+asr,whisper-small,ggml f16,6,no,no,SM-S938B,voxforge-ru-20,203250,162322,0.799,0.1702,-,-,465,"RelWithDebInfo; ВЫБРАНА: лучший WER. RTF завышен: whisper паддит каждый файл до 30 с"
+asr,whisper-small,ggml f16,6,no,no,SM-S938B,dialog_2spk,79825,27894,0.349,-,-,-,465,"тот же движок на записи 80 с: RTF 0.35, реальный сценарий"

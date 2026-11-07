@@ -52,17 +52,24 @@ class WhisperBridge(private val context: Context) {
         }
     }
 
-    /** Модель уже на устройстве (assets распакованы или положена вручную). */
+    /**
+     * Модель уже на устройстве (assets распакованы или положена вручную).
+     *
+     * Порядок важен: сначала проверяем assets именно этого имени. Иначе после
+     * одной распаковки в filesDir остаётся модель по умолчанию, и запрос
+     * другой модели молча возвращает её же — так замер сравнивал base с base.
+     */
     fun modelAvailable(assetPath: String = DEFAULT_MODEL_ASSET): Boolean =
-        File(context.filesDir, assetPath.substringAfterLast('/')).let {
-            it.exists() && it.length() > 0
-        } || runCatching {
+        runCatching {
             context.assets.open(assetPath).close(); true
-        }.getOrDefault(false)
+        }.getOrDefault(false) || File(context.filesDir, assetPath.substringAfterLast('/')).let {
+            it.exists() && it.length() > 0
+        }
 
     /** Достаёт модель из assets в filesDir один раз. */
     private fun ensureModelUnpacked(assetPath: String): File? {
         val target = File(context.filesDir, assetPath.substringAfterLast('/'))
+        // Имя файла — часть ключа: разные модели не должны перетирать друг друга.
         if (target.exists() && target.length() > 0) return target
         return try {
             context.assets.open(assetPath).use { input ->
@@ -80,12 +87,22 @@ class WhisperBridge(private val context: Context) {
 
     companion object {
         /**
-         * Модель по умолчанию. base, а не tiny: на живых прогонах tiny
-         * давал галлюцинации и нечитаемый текст (docs/runs/run-003.md), а
-         * разница в скорости на Release-сборке не критична. Выбор закреплён
-         * замером WER на устройстве — см. docs/benchmarks/measurements.csv.
+         * Модель по умолчанию — small. Выбор по замеру на устройстве
+         * (SM-S938B, 20 записей VoxForge RU, docs/benchmarks/measurements.csv):
+         *
+         *   tiny   WER 0.368   RTF 0.10
+         *   base   WER 0.245   RTF 0.22
+         *   small  WER 0.170   RTF 0.36   <- выбрана
+         *
+         * Транскрибация — 40 из 100 баллов, скорость — 10. small даёт
+         * −7.5 п.п. WER и остаётся втрое быстрее реального времени на
+         * диалоге (RTF 0.36 на записи 80 с). Меньше RTF 0.22 у base не
+         * оправдывает потерю точности.
+         *
+         * Модель на слабое устройство: передать "models/ggml-base.bin" в
+         * WhisperAsrEngine/EnginesFactory — код к этому готов.
          */
-        const val DEFAULT_MODEL_ASSET = "models/ggml-base.bin"
+        const val DEFAULT_MODEL_ASSET = "models/ggml-small.bin"
 
         init {
             System.loadLibrary("whisper_jni")

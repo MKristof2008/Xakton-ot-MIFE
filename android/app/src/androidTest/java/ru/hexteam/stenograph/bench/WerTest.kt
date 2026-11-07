@@ -57,7 +57,7 @@ class WerTest {
         // Модель выбирается аргументом, чтобы сравнить кандидатов одной сборкой:
         //   -Pandroid.testInstrumentationRunnerArguments.model=ggml-tiny.bin
         val modelName = InstrumentationRegistry.getArguments()
-            .getString("model") ?: "ggml-base.bin"
+            .getString("model") ?: "ggml-small.bin"
         val engine = WhisperAsrEngine(context, modelAsset = "models/$modelName")
         check(engine.isReady()) { "Модель ASR не найдена: models/$modelName" }
 

@@ -26,8 +26,15 @@ android {
 
     buildTypes {
         debug {
-            // В debug включены заглушки: приложение работает без моделей и без сети.
+            // Отладочная сборка: те же движки, что в release, но с отладочной
+            // информацией. Оптимизация нативного кода включена и здесь —
+            // иначе замеры RTF в debug не отражают реальную скорость.
             isMinifyEnabled = false
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+                }
+            }
         }
         release {
             isMinifyEnabled = false

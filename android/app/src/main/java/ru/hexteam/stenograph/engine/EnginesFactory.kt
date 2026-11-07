@@ -26,12 +26,14 @@ object EnginesFactory {
         context: Context,
         expectedSpeakers: Int? = null,
         useLlm: Boolean = true,
+        /** Имя модели ASR в assets; по умолчанию — выбранная замером. */
+        asrModel: String = WhisperBridge.DEFAULT_MODEL_ASSET,
     ): Pipeline {
         ModelStore.installDiarization(context)
         LocalLlmEngine(context).install()
 
         return Pipeline(
-            asr = WhisperAsrEngine(context),
+            asr = WhisperAsrEngine(context, modelAsset = asrModel),
             diarization = SherpaDiarizationEngine(context),
             llm = LocalLlmEngine(context),
         )
