@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import ru.mifi.stenograf.output.HexJson
 import ru.mifi.stenograf.ui.AppState
 import ru.mifi.stenograf.ui.ImportScreen
+import ru.mifi.stenograf.ui.HistoryScreen
 import ru.mifi.stenograf.ui.ProcessingScreen
 import ru.mifi.stenograf.ui.RecordScreen
 import ru.mifi.stenograf.ui.ResultScreen
@@ -88,11 +89,13 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
             state = state,
             onPickFile = { uri: Uri, name: String, speakers: Int? -> state.start(uri, name, speakers) },
             onRecord = { state.goRecord() },
+            onHistory = { state.openHistory() },
         )
         Screen.RECORD -> RecordScreen(
             state = state,
             onRecorded = { file, speakers -> state.startRecorded(file, speakers) },
         )
+        Screen.HISTORY -> HistoryScreen(state)
         Screen.PROCESSING -> ProcessingScreen(state)
         Screen.RESULT -> ResultScreen(
             state = state,

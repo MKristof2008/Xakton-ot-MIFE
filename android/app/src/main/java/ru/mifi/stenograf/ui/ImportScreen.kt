@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Upload
@@ -56,6 +57,7 @@ fun ImportScreen(
     state: AppState,
     onPickFile: (Uri, String, Int?) -> Unit,
     onRecord: () -> Unit = {},
+    onHistory: () -> Unit = {},
 ) {
     var speakersAuto by remember { mutableStateOf(true) }
     var speakersCount by remember { mutableStateOf(2) }
@@ -96,6 +98,16 @@ fun ImportScreen(
         )
 
         ModelsCard(state)
+
+        OutlinedButton(
+            onClick = onHistory,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(14.dp),
+        ) {
+            Icon(Icons.Filled.History, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("История расшифровок", style = MaterialTheme.typography.labelLarge)
+        }
 
         Row(
             modifier = Modifier

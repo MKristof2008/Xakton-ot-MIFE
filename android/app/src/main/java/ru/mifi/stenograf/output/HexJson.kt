@@ -57,6 +57,21 @@ object HexJson {
         return errors
     }
 
+    /** Массив реплик без обёртки — для истории и других мест, где нужен только список. */
+    fun toJsonArray(replicas: List<Replica>): JSONArray {
+        val arr = JSONArray()
+        for (r in replicas) {
+            arr.put(
+                JSONObject()
+                    .put("speaker_id", r.speakerId)
+                    .put("start_ms", r.startMs)
+                    .put("end_ms", r.endMs)
+                    .put("text", r.text),
+            )
+        }
+        return arr
+    }
+
     /** Человекочитаемый текст: "[MM:SS] Спикер N: реплика". */
     fun toText(replicas: List<Replica>): String = replicas.joinToString("\n") { it.displayLine() }
 }

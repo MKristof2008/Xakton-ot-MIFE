@@ -18,7 +18,7 @@ import ru.mifi.stenograf.pipeline.TranscriptPipeline
 import ru.mifi.stenograf.pipeline.TranscriptResult
 
 /** Экран приложения. */
-enum class Screen { IMPORT, RECORD, PROCESSING, RESULT, ERROR }
+enum class Screen { IMPORT, RECORD, PROCESSING, RESULT, HISTORY, ERROR }
 
 class AppState(private val context: Context) : ViewModel() {
 
@@ -37,6 +37,15 @@ class AppState(private val context: Context) : ViewModel() {
     var modelsReady by mutableStateOf(ModelStore.isReady(context))
         private set
     var modelsMessage by mutableStateOf(ModelStore.describe(context))
+
+    private val historyStore = ru.mifi.stenograf.history.HistoryStore(context)
+    var history by mutableStateOf<List<ru.mifi.stenograf.history.HistoryStore.Item>>(emptyList())
+        private set
+    var historyLoading by mutableStateOf(false)
+        private set
+
+    /** Открытая из истории запись (если смотрим не только что сделанную). */
+    var viewingTitle by mutableStateOf("")
         private set
 
     init {
@@ -105,6 +114,19 @@ class AppState(private val context: Context) : ViewModel() {
                             res.stagesMs.entries.joinToString("\n") { "${it.key}=${it.value}ms" },
                     )
                 }
+                // Сохраняем в историю: аудио копируется, чтобы его можно было
+                // прослушать позже — исходный content:// может стать недоступен.
+                withContext(Dispatchers.IO) {
+                    historyStore.save(
+                        title = displayName,
+                        audioUri = uri,
+                        durationMs = res.durationMs,
+                        processingMs = res.processingMs,
+                        speakerCount = res.speakerCount,
+                        replicas = res.replicas,
+                    )
+                }
+                viewingTitle = ""
                 screen = Screen.RESULT
             } catch (e: Exception) {
                 error = e.message ?: e.toString()
@@ -117,6 +139,45 @@ class AppState(private val context: Context) : ViewModel() {
     fun startRecorded(file: java.io.File, speakers: Int?) {
         start(android.net.Uri.fromFile(file), file.name, speakers)
     }
+
+    fun openHistory() {
+        screen = Screen.HISTORY
+        loadHistory()
+    }
+
+    fun loadHistory() {
+        viewModelScope.launch {
+            historyLoading = true
+            history = withContext(Dispatchers.IO) { historyStore.list() }
+            historyLoading = false
+        }
+    }
+
+    /** Открыть запись из истории: показываем сохранённый результат и аудио. */
+    fun openFromHistory(item: ru.mifi.stenograf.history.HistoryStore.Item) {
+        result = TranscriptResult(
+            replicas = item.replicas,
+            durationMs = item.durationMs,
+            processingMs = item.processingMs,
+            stagesMs = emptyMap(),
+            speakerCount = item.speakerCount,
+        )
+        recordedPath = item.audioPath
+        viewingTitle = item.title
+        audioUri = item.audioPath?.let { android.net.Uri.fromFile(java.io.File(it)) }
+        screen = Screen.RESULT
+    }
+
+    fun deleteHistoryItem(item: ru.mifi.stenograf.history.HistoryStore.Item) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { historyStore.delete(item.id) }
+            loadHistory()
+        }
+    }
+
+    /** Путь к аудиофайлу во внутреннем каталоге (для плеера). */
+    var recordedPath by mutableStateOf<String?>(null)
+        private set
 
     fun goRecord() {
         screen = Screen.RECORD

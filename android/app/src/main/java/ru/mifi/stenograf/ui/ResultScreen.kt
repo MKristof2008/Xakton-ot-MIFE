@@ -1,8 +1,20 @@
 package ru.mifi.stenograf.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,10 +23,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
@@ -25,13 +37,13 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,10 +51,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import ru.mifi.stenograf.audio.AudioPlayback
 import ru.mifi.stenograf.output.Replica
 import ru.mifi.stenograf.pipeline.Stage
 import ru.mifi.stenograf.pipeline.TranscriptResult
@@ -60,6 +71,23 @@ fun ResultScreen(
     val result = state.result ?: return
     var showTimecodes by remember { mutableStateOf(true) }
 
+    // Плеер: живой, если у результата есть файл аудио (запись или история).
+    val playback = remember { AudioPlayback() }
+    val audioPath = state.recordedPath ?: state.audioUri?.takeIf { it.scheme == "file" }?.path
+    LaunchedEffect(audioPath) {
+        if (audioPath != null) playback.prepare(audioPath) else playback.stop()
+    }
+    // Тикер позиции, пока играет.
+    LaunchedEffect(playback.isPlaying) {
+        while (playback.isPlaying) {
+            playback.syncPosition()
+            kotlinx.coroutines.delay(120)
+        }
+    }
+    // Активная реплика: та, внутри которой сейчас играет звук.
+    val activeIndex = if (audioPath == null) -1
+    else result.replicas.indexOfFirst { playback.positionMs in it.startMs..it.endMs }
+
     Column(modifier = Modifier.fillMaxSize().brandGlow()) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -67,6 +95,14 @@ fun ResultScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item { SummaryHeader(result) }
+            if (audioPath != null) {
+                item {
+                    PlayerBar(
+                        playback = playback,
+                        title = state.viewingTitle.ifBlank { state.fileName },
+                    )
+                }
+            }
             item { MetricsRow(result) }
             item {
                 Row(
@@ -96,8 +132,17 @@ fun ResultScreen(
                     )
                 }
             }
-            items(result.replicas, key = { "${it.startMs}-${it.speakerId}" }) { rep ->
-                ReplicaRow(rep, showTimecodes)
+            itemsIndexed(result.replicas, key = { _, r -> "${r.startMs}-${r.speakerId}" }) { index, rep ->
+                ReplicaRow(
+                    rep = rep,
+                    showTimecodes = showTimecodes,
+                    isActive = index == activeIndex,
+                    onClick = if (audioPath != null) {
+                        { playback.playFrom(rep.startMs) }
+                    } else {
+                        null
+                    },
+                )
             }
         }
 
@@ -184,8 +229,15 @@ private fun MetricTile(
  * с номером и временем. Полоса даёт мгновенное узнавание «кто это» при чтении.
  */
 @Composable
-private fun ReplicaRow(rep: Replica, showTimecodes: Boolean) {
+private fun ReplicaRow(
+    rep: Replica,
+    showTimecodes: Boolean,
+    isActive: Boolean = false,
+    onClick: (() -> Unit)? = null,
+) {
     val color = speakerColor(rep.speakerId)
+    val bg = if (isActive) color.copy(alpha = 0.16f)
+    else MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
     val speakerNumber = rep.speakerId.substringAfterLast('_')
 
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -201,7 +253,8 @@ private fun ReplicaRow(rep: Replica, showTimecodes: Boolean) {
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                .background(bg)
+                .then(if (onClick != null) Modifier.clickableNoRipple(onClick) else Modifier)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
@@ -271,3 +324,94 @@ private fun ExportBar(onJson: () -> Unit, onText: () -> Unit, onNew: () -> Unit)
         }
     }
 }
+/**
+ * Плеер записи: play/pause, полоса прогресса, текущее время.
+ * Полоса кликабельна — можно перескочить в любое место, не листая реплики.
+ */
+@Composable
+private fun PlayerBar(playback: AudioPlayback, title: String) {
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val brandGradient = BrandGradient
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickableNoRipple { playback.toggle() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (playback.isPlaying) "Пауза" else "Слушать",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${Replica.timecode(playback.positionMs)} / ${Replica.timecode(playback.durationMs)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            // Полоса прогресса: клик по ней перескакивает в это место записи.
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(22.dp)
+                    .pointerInput(playback.durationMs) {
+                        detectTapGestures { offset ->
+                            if (playback.durationMs > 0) {
+                                val frac = (offset.x / size.width).coerceIn(0f, 1f)
+                                playback.playFrom((frac * playback.durationMs).toInt())
+                            }
+                        }
+                    },
+            ) {
+                val cy = size.height / 2f
+                drawLine(
+                    color = surfaceVariant,
+                    start = Offset(0f, cy),
+                    end = Offset(size.width, cy),
+                    strokeWidth = 4.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+                val frac = if (playback.durationMs > 0) {
+                    (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f)
+                } else 0f
+                if (frac > 0f) {
+                    drawLine(
+                        brush = Brush.horizontalGradient(brandGradient),
+                        start = Offset(0f, cy),
+                        end = Offset(size.width * frac, cy),
+                        strokeWidth = 4.dp.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                }
+                drawCircle(
+                    color = onSurface,
+                    radius = 5.dp.toPx(),
+                    center = Offset(size.width * frac, cy),
+                )
+            }
+        }
+    }
+}
+
