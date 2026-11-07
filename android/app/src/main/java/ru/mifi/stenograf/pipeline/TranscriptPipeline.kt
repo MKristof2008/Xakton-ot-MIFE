@@ -169,6 +169,9 @@ class TranscriptPipeline(private val context: Context) {
             var processedMs = 0L
             val totalMs = utterances.sumOf { (it.endMs - it.startMs).toLong() }.coerceAtLeast(1)
             for ((idx, u) in utterances.withIndex()) {
+                // Проверка отмены на каждой реплике: распознавание — самый
+                // долгий этап, и без этого «Отменить» срабатывало с задержкой
+                // до нескольких десятков секунд.
                 checkCancel()
                 val slice = slicePcm(pcm.samples, u.startMs, u.endMs)
                 // Короткие фрагменты (вдох, скрип, обрывок слога) не распознаём:

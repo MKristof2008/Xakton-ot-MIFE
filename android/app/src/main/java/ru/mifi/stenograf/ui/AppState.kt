@@ -18,7 +18,7 @@ import ru.mifi.stenograf.pipeline.TranscriptPipeline
 import ru.mifi.stenograf.pipeline.TranscriptResult
 
 /** Экран приложения. */
-enum class Screen { IMPORT, RECORD, PROCESSING, RESULT, HISTORY, ERROR }
+enum class Screen { IMPORT, RECORD, PROCESSING, RESULT, HISTORY, CANCELLED, ERROR }
 
 class AppState(private val context: Context) : ViewModel() {
 
@@ -128,9 +128,19 @@ class AppState(private val context: Context) : ViewModel() {
                 }
                 viewingTitle = ""
                 screen = Screen.RESULT
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Отмена корутины — это НЕ ошибка. Раньше она попадала в общий
+                // catch и пользователь видел «Ошибка: Обработка отменена».
+                throw e
             } catch (e: Exception) {
-                error = e.message ?: e.toString()
-                screen = Screen.ERROR
+                // Отмену по кнопке пайплайн сигналит через check(): это
+                // IllegalStateException с нашим текстом. Отделяем её от сбоев.
+                if (cancelled || e.message == "Обработка отменена") {
+                    screen = Screen.CANCELLED
+                } else {
+                    error = e.message ?: e.toString()
+                    screen = Screen.ERROR
+                }
             }
         }
     }
@@ -184,10 +194,35 @@ class AppState(private val context: Context) : ViewModel() {
         error = null
     }
 
+    /**
+     * Отмена обработки. Показываем отдельный экран, а не молча выкидываем
+     * на старт: пользователь должен понимать, что обработка остановлена,
+     * и иметь явную кнопку вернуться. Раньше экран просто «прыгал» на старт.
+     */
     fun cancel() {
         cancelled = true
         job?.cancel()
+        job = null
+        screen = Screen.CANCELLED
+    }
+
+    /** Вернуться на старт после отмены. */
+    fun backFromCancel() {
+        cancelled = false
+        result = null
+        error = null
         screen = Screen.IMPORT
+    }
+
+    /** Запустить обработку того же файла заново после отмены. */
+    fun retryLast() {
+        val uri = audioUri
+        if (uri == null) {
+            backFromCancel()
+            return
+        }
+        cancelled = false
+        start(uri, fileName, null)
     }
 
     fun backToImport() {
