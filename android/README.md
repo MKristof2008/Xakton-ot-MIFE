@@ -35,7 +35,8 @@ Gradle 8.7, AGP 8.5.2, Kotlin 2.0.21.
 ```
 аудиофайл (SAF, content://)
    ↓ AudioDecoder      MediaCodec/MediaExtractor → PCM float32 16 кГц моно
-   ↓ AsrEngine         sherpa-onnx + Whisper base int8, language=ru, окна 20 с / перекрытие 2 с
+   ↓ LanguageRouter    язык записи (Авто / Русский / English)
+   ↓ AsrEngine         zipformer-ru (русский) или Whisper base int8 (остальные языки)
    ↓ Diarizer          sherpa-onnx: pyannote segmentation-3.0 + 3D-Speaker ERes2Net + кластеризация
    ↓ Merge             разрезание сегментов по смене говорящего, склейка, нумерация speaker_N
    ↓ LlmPost           ONNX Runtime GenAI: пунктуация и регистр (опционально, с защитой от галлюцинаций)
@@ -45,6 +46,7 @@ Gradle 8.7, AGP 8.5.2, Kotlin 2.0.21.
 | Модуль | Файл | Что делает |
 |---|---|---|
 | Декодер | `audio/AudioDecoder.kt` | любой формат → 16 кГц моно, ресемплинг, нормализация |
+| Язык | `asr/LanguageRouter.kt` | выбор движка по языку записи: RU → zipformer, остальное → Whisper |
 | ASR | `asr/AsrEngine.kt` | распознавание, таймкоды от начала файла |
 | Диаризация | `diar/Diarizer.kt` | сегментация + эмбеддинги + кластеризация |
 | Слияние | `output/Merge.kt` | порт `diarization.py::_best_speaker`, `output.py::merge_adjacent`, `normalize_speakers` |
@@ -56,8 +58,8 @@ Gradle 8.7, AGP 8.5.2, Kotlin 2.0.21.
 
 | Модель | Файл в `assets/models` | Размер | Лицензия |
 |---|---|---|---|
-| Whisper small int8 (multilingual) | `asr/whisper-small-*.onnx` | 374 МБ | MIT |
-| Whisper base int8 (запасной) | `asr/whisper-base-*.onnx` | 152 МБ | MIT |
+| zipformer-ru int8 (русский) | `asr/ru-zipformer-*.onnx` | 71 МБ | Apache-2.0 |
+| Whisper base int8 (мультиязычная, английский) | `asr/whisper-base-*.onnx` | 152 МБ | MIT |
 | pyannote segmentation 3.0 | `diar/segmentation-3.0.onnx` | 5.7 МБ | MIT |
 | 3D-Speaker ERes2Net | `diar/3dspeaker_eres2net.onnx` | 38 МБ | Apache-2.0 |
 

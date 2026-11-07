@@ -12,22 +12,29 @@ import ru.mifi.stenograf.output.AsrSegment
 import java.io.File
 
 /**
- * Движок распознавания с выбором модели.
+ * Движок распознавания с выбором модели и языка.
  *
  * Почему два движка:
- *  - Whisper multilingual (`small`) — универсальный, хорошо ставит пробелы и
- *    пунктуацию, но русская лексика у него вторична: разговорные слова и мат
- *    он восстанавливает «как услышал в английском» и уходит в петли.
+ *  - Whisper multilingual (`base`) — многоязычный: понимает английский и ещё
+ *    ~90 языков, сам определяет язык по звуку, ставит пунктуацию и пробелы.
+ *    Минус — на русском он слабее и дольше.
  *  - Zipformer-ru (Vosk model-ru) обучен ТОЛЬКО на русском: знает разговорную
- *    лексику, мат и сленг, не пытается писать по-английски, быстрее в 3 раза.
- *    Минус — не ставит знаки и иногда нормализует текст (цифры словами).
+ *    лексику и мат, не уходит в английские петли, быстрее Whisper втрое.
+ *    Минус — не ставит знаки и английского не понимает вовсе.
  *
- * Используем Zipformer-ru для звука, Whisper small — как запасной и эталон
- * для сравнения качества на своих записях.
+ * Отсюда правило выбора (см. [LanguageRouter]): русский звук — zipformer-ru,
+ * всё остальное — Whisper с определённым (или заданным) языком.
  */
 class AsrEngine(
     context: Context,
     private val engine: EngineKind = EngineKind.RU_TRANSDUCER,
+    /**
+     * Язык распознавания для Whisper (ISO-код). Пустая строка — автоопределение
+     * самой моделью: Whisper умеет угадывать язык по первым секундам и
+     * возвращает его в [OfflineRecognizerResult.lang].
+     * У zipformer-ru параметра нет: модель обучена только на русском.
+     */
+    private val language: String = "ru",
     private val threads: Int = defaultThreads(),
 ) {
 
@@ -61,11 +68,81 @@ class AsrEngine(
             val dir = ModelStore.asrDir(context)
             val out = mutableListOf<EngineKind>()
             if (ModelStore.RU_MODEL.files(dir).all { it.exists() }) out += EngineKind.RU_TRANSDUCER
-            if (ModelStore.whisperFiles(dir, ModelStore.PREFERRED_ASR).all { it.exists() }) {
-                out += EngineKind.WHISPER_SMALL
+            val whisperReady = ModelStore.ASR_VARIANTS.any { v ->
+                ModelStore.whisperFiles(dir, v).all { it.exists() }
             }
+            if (whisperReady) out += EngineKind.WHISPER_SMALL
             return out
         }
+
+        /**
+         * Язык записи по короткому фрагменту звука.
+         *
+         * Определяет только Whisper: у него в декодере есть детектор языка,
+         * который включается пустой строкой в поле `language`. Zipformer-ru
+         * языков не различает по построению.
+         *
+         * Распознаватель создаётся отдельно и сразу освобождается: держать
+         * в памяти два Whisper одновременно (свой и детектор) — лишние
+         * ~150 МБ, на телефоне это ловится как вылет процесса.
+         *
+         * @return ISO-код ("ru", "en", …) или null, если модель недоступна
+         *         либо язык не определился.
+         */
+        fun detectLanguage(context: Context, samples: FloatArray): String? {
+            if (samples.isEmpty()) return null
+            val dir = ModelStore.asrDir(context)
+            val variant = ModelStore.activeAsrVariant(context)
+            if (!ModelStore.whisperFiles(dir, variant).all { it.exists() }) return null
+            val rec = runCatching {
+                OfflineRecognizer(config = whisperConfig(dir, variant, language = ""))
+            }.getOrNull() ?: return null
+            return try {
+                val stream = rec.createStream().apply { acceptWaveform(samples, 16_000) }
+                rec.decode(stream)
+                val lang = rec.getResult(stream).lang
+                stream.release()
+                lang?.trim()?.lowercase()?.takeIf { it.isNotEmpty() && it != "unknown" }
+            } catch (e: Exception) {
+                null
+            } finally {
+                runCatching { rec.release() }
+            }
+        }
+
+        /** Конфиг Whisper. Пустой язык — автоопределение самой моделью. */
+        private fun whisperConfig(
+            dir: File,
+            variant: String,
+            language: String,
+            threads: Int = defaultThreads(),
+        ): OfflineRecognizerConfig =
+            OfflineRecognizerConfig(
+                featConfig = FeatureConfig(sampleRate = 16_000, featureDim = 80),
+                modelConfig = OfflineModelConfig(
+                    whisper = OfflineWhisperModelConfig(
+                        encoder = File(dir, ModelStore.encoderName(variant)).apply {
+                            require(exists()) { "Нет файла модели: $name" }
+                        }.absolutePath,
+                        decoder = File(dir, ModelStore.decoderName(variant)).apply {
+                            require(exists()) { "Нет файла модели: $name" }
+                        }.absolutePath,
+                        language = language,
+                        task = "transcribe",
+                        // Token-таймстемпы требуют attention-выходов, которых нет
+                        // в int8-экспорте: sherpa-onnx печатает предупреждение и
+                        // всё равно не отдаёт метки. Границы реплик у нас уже
+                        // заданы диаризацией, метки пословно не нужны.
+                        enableTokenTimestamps = false,
+                        enableSegmentTimestamps = true,
+                    ),
+                    tokens = File(dir, ModelStore.tokensName(variant)).absolutePath,
+                    modelType = "whisper",
+                    numThreads = threads,
+                    provider = "cpu",
+                ),
+                decodingMethod = "greedy_search",
+            )
     }
 
     private fun ensureLoaded(): OfflineRecognizer =
@@ -92,31 +169,8 @@ class AsrEngine(
                     )
                 }
 
-                EngineKind.WHISPER_SMALL -> {
-                    val variant = ModelStore.PREFERRED_ASR
-                    OfflineRecognizerConfig(
-                        featConfig = FeatureConfig(sampleRate = 16_000, featureDim = 80),
-                        modelConfig = OfflineModelConfig(
-                            whisper = OfflineWhisperModelConfig(
-                                encoder = File(dir, ModelStore.encoderName(variant)).apply {
-                                    require(exists()) { "Нет файла модели: $name" }
-                                }.absolutePath,
-                                decoder = File(dir, ModelStore.decoderName(variant)).apply {
-                                    require(exists()) { "Нет файла модели: $name" }
-                                }.absolutePath,
-                                language = "ru",
-                                task = "transcribe",
-                                enableTokenTimestamps = true,
-                                enableSegmentTimestamps = true,
-                            ),
-                            tokens = File(dir, ModelStore.tokensName(variant)).absolutePath,
-                            modelType = "whisper",
-                            numThreads = threads,
-                            provider = "cpu",
-                        ),
-                        decodingMethod = "greedy_search",
-                    )
-                }
+                EngineKind.WHISPER_SMALL ->
+                    whisperConfig(dir, ModelStore.activeAsrVariant(appContext), language, threads)
             }
             OfflineRecognizer(config = cfg).also { recognizer = it }
         }
@@ -201,8 +255,11 @@ class AsrEngine(
             // Раньше он заменялся на пробел ВНУТРИ токена, из-за чего получалось
             // «До б ры й д ень» вместо «Добрый день».
             val raw = tokens[i]
-            val startsWord = raw.startsWith(MARK)
-            val piece = raw.replace(MARK.toString(), "")
+            // У zipformer граница слова — `▁` в начале токена, у Whisper —
+            // обычный пробел перед токеном (« After», « early»). Без этого
+            // английский текст склеивался бы в «Afterearlynightfall».
+            val startsWord = raw.startsWith(MARK) || raw.startsWith(" ")
+            val piece = raw.removePrefix(MARK.toString()).trim()
             if (piece.isEmpty()) {
                 prevEnd = t
                 continue

@@ -378,7 +378,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 | | |
 |---|---|
-| ASR | sherpa-onnx + Whisper base int8, `language=ru` |
+| ASR | sherpa-onnx: zipformer-ru для русского + Whisper base int8 (мультиязычный) для английского. Язык выбирается в настройках (Авто / Русский / English) |
 | Диаризация | sherpa-onnx: pyannote segmentation-3.0 + 3D-Speaker ERes2Net + кластеризация |
 | LLM | ONNX Runtime GenAI (опционально), с защитой от галлюцинаций |
 | Разрешения | ни одного сетевого: `INTERNET`/`ACCESS_NETWORK_STATE` удалены из манифеста |
