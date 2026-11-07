@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,7 +59,7 @@ import ru.hexteam.stenograph.ui.theme.speakerColor
  * поиск по тексту, переименование говорящих (только отображение),
  * экспорт: JSON в файл (SAF), JSON/TXT/SRT через «Поделиться».
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ResultScreen(state: AppViewModel.UiState, vm: AppViewModel) {
     val context = LocalContext.current
@@ -136,8 +137,21 @@ fun ResultScreen(state: AppViewModel.UiState, vm: AppViewModel) {
                                 .background(speakerColor(speaker)),
                         )
                     },
+                    // Длинное нажатие — проверить голос по сохранённым:
+                    // покажет всех кандидатов с процентами сходства.
+                    modifier = Modifier.combinedClickable(
+                        onClick = {
+                            vm.setSpeakerFilter(if (state.speakerFilter == speaker) null else speaker)
+                        },
+                        onLongClick = { vm.identifyVoice(speaker) },
+                    ),
                 )
             }
+        }
+
+        // Проверка одного голоса по базе: кто это из сохранённых и насколько похоже
+        state.voiceCheck?.let { check ->
+            VoiceCheckCard(check, vm)
         }
 
         // Поиск по тексту
@@ -352,3 +366,90 @@ private fun shareText(context: Context, text: String, fileName: String) {
     }
     context.startActivity(Intent.createChooser(intent, "Экспорт расшифровки"))
 }
+
+/**
+ * Карточка проверки одного голоса по сохранённым.
+ *
+ * Показывает всех кандидатов с процентом сходства, а не только лучшего:
+ * человеку важно видеть, на кого ещё похоже. Если два варианта близки —
+ * решение за ним, автоподстановка тут была бы опасна.
+ */
+@Composable
+private fun VoiceCheckCard(check: AppViewModel.UiState.VoiceCheck, vm: AppViewModel) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "Голос ${vm.labelFor(check.speakerId)}",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                TextButton(onClick = { vm.clearVoiceCheck() }) { Text("Закрыть") }
+            }
+
+            if (check.candidates.isEmpty()) {
+                Text(
+                    text = "В базе нет сохранённых голосов. Назовите этого " +
+                        "говорящего — и он запомнится.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                return@Column
+            }
+
+            val best = check.best
+            Text(
+                text = if (best != null) {
+                    "Похоже на «${best.name}» — ${percent(best.similarity)}"
+                } else {
+                    "Среди сохранённых похожего голоса нет — не узнан"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+
+            // Остальные кандидаты: видно, кого голос напоминает ещё
+            check.candidates.forEachIndexed { index, c ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                ) {
+                    Text(
+                        text = "${index + 1}. ${c.name}",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = percent(c.similarity),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (c.confident) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                    if (c.confident) {
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(
+                            onClick = { vm.rememberSpeaker(check.speakerId, c.name) },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        ) {
+                            Text("Подписать", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Сходство 0..1 в проценты: 0.894 → «89 %». */
+private fun percent(value: Float): String =
+    "${(value.coerceIn(0f, 1f) * 100).toInt()} %"

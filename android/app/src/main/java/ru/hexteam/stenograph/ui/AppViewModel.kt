@@ -18,6 +18,7 @@ import ru.hexteam.stenograph.core.Pipeline
 import ru.hexteam.stenograph.core.PipelineStage
 import ru.hexteam.stenograph.core.TranscriptLine
 import ru.hexteam.stenograph.engine.AudioPrep
+import ru.hexteam.stenograph.engine.VoiceProfileStore
 import ru.hexteam.stenograph.engine.EnginesFactory
 import ru.hexteam.stenograph.export.Export
 import ru.hexteam.stenograph.service.TranscriptionService
@@ -54,8 +55,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val speakerFilter: String? = null,
         /** Голоса, узнанные в базе: «speaker_1» → имя человека. */
         val recognizedSpeakers: Map<String, String> = emptyMap(),
+        /**
+         * Проверка выбранного голоса по базе: все сохранённые люди с
+         * процентом сходства, от лучшего к худшему. Пусто — не проверяли.
+         */
+        val voiceCheck: VoiceCheck? = null,
         val searchQuery: String = "",
     ) {
+        /** Результат сверки одного голоса со всей базой. */
+        data class VoiceCheck(
+            val speakerId: String,
+            val candidates: List<Candidate>,
+        ) {
+            data class Candidate(
+                val name: String,
+                /** 0..1, косинусное сходство. */
+                val similarity: Float,
+                /** Подтверждён этим числом записей. */
+                val samples: Int,
+                /** Проходит порог — можно подставить имя. */
+                val confident: Boolean,
+            )
+
+            /** Лучший кандидат, если он проходит порог. */
+            val best: Candidate? get() = candidates.firstOrNull { it.confident }
+        }
         val isBusy: Boolean
             get() = stage != PipelineStage.IDLE &&
                 stage != PipelineStage.DONE &&
@@ -223,6 +247,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 recognizedSpeakers = it.recognizedSpeakers + (speakerId to name.trim()),
             )
         }
+    }
+
+    /**
+     * Сверяет голос одного говорящего со всеми сохранёнными голосами.
+     *
+     * Показывает не только «кто это», но и на кого ещё похоже и насколько:
+     * при близких вариантах решение остаётся за человеком.
+     */
+    fun identifyVoice(speakerId: String) {
+        val emb = lastEmbeddings[speakerId]
+        if (emb == null) {
+            _state.update {
+                it.copy(error = "Для этой записи отпечаток голоса не посчитан")
+            }
+            return
+        }
+        val candidates = voiceProfiles.rank(emb).map {
+            UiState.VoiceCheck.Candidate(
+                name = it.name,
+                similarity = it.similarity,
+                samples = it.samples,
+                confident = it.similarity >= VoiceProfileStore.MATCH_THRESHOLD,
+            )
+        }
+        _state.update {
+            it.copy(voiceCheck = UiState.VoiceCheck(speakerId, candidates))
+        }
+    }
+
+    /** Закрывает окно проверки голоса. */
+    fun clearVoiceCheck() {
+        _state.update { it.copy(voiceCheck = null) }
     }
 
     /** Сохранённые голоса — для экрана управления базой. */

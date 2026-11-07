@@ -155,6 +155,36 @@ class VoiceProfileStore(private val context: Context) {
     }
 
     /**
+     * Все сохранённые голоса по убыванию сходства с проверяемым.
+     *
+     * Зачем не только лучший: человеку нужно видеть, на кого ЕЩЁ похож
+     * голос и насколько. При близких вариантах (85 % против 80 %) решение
+     * должен принимать он, а не порог — автоподстановка имени тут опаснее.
+     *
+     * @return пары «имя → сходство», отсортированные от лучшего к худшему
+     */
+    fun rank(embedding: FloatArray): List<Match> =
+        load()
+            .map { Match(it.name, similarity(it.embedding, embedding), it.samples) }
+            .sortedByDescending { it.similarity }
+
+    /**
+     * Проверка одного голоса по всей базе: все сохранённые люди с процентом
+     * сходства, от лучшего к худшему.
+     *
+     * Зачем не только лучший: человеку нужно видеть, на кого ЕЩЁ похож голос.
+     * Если два кандидата близки (например, 82 % и 78 %), решение принимать
+     * ему, а не порогу — автоматическая подстановка имени тут опаснее.
+     *
+     * @param limit сколько строк показывать; 0 — все
+     */
+    fun rank(embedding: FloatArray, limit: Int = 5): List<Match> =
+        load()
+            .map { Match(it.name, similarity(it.embedding, embedding), it.samples) }
+            .sortedByDescending { it.similarity }
+            .let { if (limit > 0) it.take(limit) else it }
+
+    /**
      * Сопоставляет говорящих записи с базой.
      *
      * @return «speaker_1» → имя из базы (только уверенные совпадения)
