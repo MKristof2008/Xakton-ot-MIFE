@@ -17,11 +17,24 @@ android {
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+    // Нативная сборка (whisper.cpp, llama.cpp) включается только когда
+    // исходники на месте. Иначе чистый клон без bootstrap.sh падал бы на
+    // конфигурации проекта, и юнит-тесты нельзя было бы запустить вовсе.
+    // Подготовка: android/scripts/bootstrap.sh
+    val nativeSourcesReady = file("src/main/cpp/whisper.cpp/include/whisper.h").exists()
+
+    if (nativeSourcesReady) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
         }
+    } else {
+        logger.lifecycle(
+            "whisper.cpp не найден: нативная сборка отключена. " +
+                "Запустите android/scripts/bootstrap.sh, чтобы собрать APK с моделями."
+        )
     }
 
     buildTypes {
@@ -100,7 +113,15 @@ android {
 
 dependencies {
     // sherpa-onnx: диаризация (pyannote-3.0 + 3D-Speaker) и ASR на устройстве.
-    implementation(files("libs/sherpa-onnx.aar"))
+    // AAR в git не лежит (47 МБ): android/scripts/fetch_libs.sh.
+    if (file("libs/sherpa-onnx.aar").exists()) {
+        implementation(files("libs/sherpa-onnx.aar"))
+    } else {
+        logger.lifecycle(
+            "sherpa-onnx.aar не найден: диаризация будет недоступна. " +
+                "Запустите android/scripts/fetch_libs.sh."
+        )
+    }
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

@@ -5,11 +5,13 @@ project(stenograph_jni CXX)
 # Ожидаемая структура: whisper.cpp/CMakeLists.txt, whisper.cpp/whisper.h
 set(WHISPER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/whisper.cpp)
 
+# Исходники whisper.cpp не лежат в git (55 МБ): их ставит
+# android/scripts/bootstrap.sh. Без них сборка останавливается сразу
+# с понятным сообщением, а не падает где-то в недрах ninja.
 if(NOT EXISTS ${WHISPER_DIR}/include/whisper.h)
-    message(WARNING
-        "whisper.cpp не найден в ${WHISPER_DIR}. "
-        "Склонируйте: git clone https://github.com/ggerganov/whisper.cpp "
-        "в app/src/main/cpp/. Сборка без него упадёт.")
+    message(FATAL_ERROR
+        "Не найден whisper.cpp в ${WHISPER_DIR}. "
+        "Запустите подготовку проекта: cd android && ./scripts/bootstrap.sh")
 endif()
 
 add_subdirectory(${WHISPER_DIR} ${CMAKE_CURRENT_BINARY_DIR}/whisper.cpp)
