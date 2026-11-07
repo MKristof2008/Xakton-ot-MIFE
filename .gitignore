@@ -43,3 +43,4 @@ android/app/libs/
 # клонируются/собираются скриптом android/scripts/build_llama_android.sh
 android/app/src/main/cpp/llama.cpp/
 android/app/src/main/cpp/llama-prebuilt/
+android/app/src/androidTest/assets/*.mp3

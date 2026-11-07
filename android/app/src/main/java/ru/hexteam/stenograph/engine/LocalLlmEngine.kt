@@ -82,6 +82,12 @@ class LocalLlmEngine(
         if (acceptable(candidate, text)) candidate else text
     }
 
+    /**
+     * Загружает модель один раз на этап. Повторных загрузок нет:
+     * `handle` живёт до [release], а release вызывается пайплайном после
+     * обработки всех реплик — иначе модель весом ~478 МБ грузилась бы
+     * заново на каждой строке.
+     */
     private fun load(): Boolean {
         if (handle != 0L) return true
         handle = runCatching { nativeInit(modelFile.absolutePath, THREADS) }
@@ -91,10 +97,12 @@ class LocalLlmEngine(
         return handle != 0L
     }
 
-    fun release() {
+    /** Освобождает модель (~478 МБ) после обработки всех реплик. */
+    override fun release() {
         if (handle != 0L) {
             nativeRelease(handle)
             handle = 0L
+            Log.i(TAG, "модель выгружена, память освобождена")
         }
     }
 

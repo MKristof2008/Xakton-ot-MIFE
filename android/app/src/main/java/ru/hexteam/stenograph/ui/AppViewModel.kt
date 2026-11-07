@@ -17,6 +17,7 @@ import ru.hexteam.stenograph.core.Merge
 import ru.hexteam.stenograph.core.Pipeline
 import ru.hexteam.stenograph.core.PipelineStage
 import ru.hexteam.stenograph.core.TranscriptLine
+import ru.hexteam.stenograph.engine.AudioPrep
 import ru.hexteam.stenograph.engine.EnginesFactory
 import ru.hexteam.stenograph.export.Export
 import ru.hexteam.stenograph.service.TranscriptionService
@@ -167,6 +168,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             } finally {
+                // Кэш промежуточного WAV держит десятки МБ и больше не нужен:
+                // следующая запись его перезапишет, но память нужна уже сейчас.
+                AudioPrep.clear()
                 TranscriptionService.stop(app)
             }
         }

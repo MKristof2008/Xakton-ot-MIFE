@@ -16,6 +16,13 @@ interface AsrEngine {
 
     /** Готов ли движок к работе (модель загружена). */
     fun isReady(): Boolean
+
+    /**
+     * Освобождает память модели. Вызывается пайплайном сразу после этапа:
+     * whisper (~190 МБ), диаризация (~40 МБ) и LLM (~478 МБ) вместе
+     * не помещаются, и Android убивает процесс на середине обработки.
+     */
+    fun release() {}
 }
 
 /**
@@ -29,6 +36,9 @@ interface DiarizationEngine {
     ): List<SpeakerSegment>
 
     fun isReady(): Boolean
+
+    /** Освобождает память после этапа — см. [AsrEngine.release]. */
+    fun release() {}
 }
 
 /**
@@ -40,4 +50,7 @@ interface LlmEngine {
     suspend fun clean(text: String): String
 
     fun isReady(): Boolean
+
+    /** Освобождает память после этапа — см. [AsrEngine.release]. */
+    fun release() {}
 }

@@ -16,6 +16,7 @@ import ru.hexteam.stenograph.core.Pipeline
 import ru.hexteam.stenograph.core.PipelineStage
 import ru.hexteam.stenograph.core.TranscriptJson
 import ru.hexteam.stenograph.core.TranscriptLine
+import ru.hexteam.stenograph.engine.AudioPrep
 import ru.hexteam.stenograph.engine.EnginesFactory
 import java.io.File
 
@@ -107,6 +108,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update {
                     it.copy(stage = PipelineStage.ERROR, error = e.message ?: "Не удалось обработать запись")
                 }
+            } finally {
+                // Освобождаем промежуточный WAV: он больше не нужен,
+                // а память на телефоне ограничена.
+                AudioPrep.clear()
             }
         }
     }

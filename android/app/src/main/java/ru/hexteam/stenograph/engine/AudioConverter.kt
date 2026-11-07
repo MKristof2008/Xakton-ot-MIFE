@@ -64,7 +64,11 @@ object AudioConverter {
         codec.configure(format, null, null, 0)
         codec.start()
 
-        val pcm = ArrayList<Short>()
+        // Примитивный растущий буфер вместо ArrayList<Short>: на 95-секундной
+        // записи ArrayList держит ~1.5 млн объектов-обёрток (десятки МБ)
+        // поверх самих данных, и процесс убивало по памяти.
+        var pcm = ShortArray(1 shl 20) // ~2 с при 16 кГц
+        var pcmLen = 0
         val info = MediaCodec.BufferInfo()
         var sawInputEos = false
         var sawOutputEos = false
@@ -88,7 +92,14 @@ object AudioConverter {
             if (outIndex >= 0) {
                 val buffer = codec.getOutputBuffer(outIndex)!!
                 buffer.order(ByteOrder.LITTLE_ENDIAN)
-                while (buffer.remaining() >= 2) pcm.add(buffer.short)
+                val count = buffer.remaining() / 2
+                if (pcmLen + count > pcm.size) {
+                    var grown = pcm.size * 2
+                    while (grown < pcmLen + count) grown *= 2
+                    pcm = pcm.copyOf(grown)
+                }
+                buffer.asShortBuffer().get(pcm, pcmLen, count)
+                pcmLen += count
                 codec.releaseOutputBuffer(outIndex, false)
                 if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) sawOutputEos = true
             } else if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
@@ -99,7 +110,7 @@ object AudioConverter {
         codec.stop()
         codec.release()
 
-        val mono = downmix(pcm.toShortArray(), channels)
+        val mono = downmix(pcm.copyOf(pcmLen), channels)
         val resampled = resample(mono, sourceRate, TARGET_RATE)
         writeWav(resampled, File(context.cacheDir, "input16k.wav"))
         File(context.cacheDir, "input16k.wav")

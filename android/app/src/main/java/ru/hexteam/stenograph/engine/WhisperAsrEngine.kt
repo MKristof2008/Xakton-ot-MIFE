@@ -26,6 +26,9 @@ class WhisperAsrEngine(
     override fun isReady(): Boolean =
         runCatching { bridge.modelAvailable(modelAsset) }.getOrDefault(false)
 
+    /** Выгружает модель из памяти: следующему этапу нужно её место. */
+    override fun release() = bridge.release()
+
     override suspend fun transcribe(audioPath: String): List<AsrSegment> =
         withContext(Dispatchers.Default) {
             if (!bridge.load(modelAsset)) {

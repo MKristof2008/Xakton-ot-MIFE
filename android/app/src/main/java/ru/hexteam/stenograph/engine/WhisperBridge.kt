@@ -45,10 +45,12 @@ class WhisperBridge(private val context: Context) {
         }
     }
 
+    /** Освобождает модель: ~190 МБ нужны следующему этапу (диаризация, LLM). */
     fun release() {
         if (handle != 0L) {
             nativeRelease(handle)
             handle = 0L
+            android.util.Log.i("WhisperJNI", "модель выгружена, память освобождена")
         }
     }
 
@@ -102,7 +104,7 @@ class WhisperBridge(private val context: Context) {
          * Модель на слабое устройство: передать "models/ggml-base.bin" в
          * WhisperAsrEngine/EnginesFactory — код к этому готов.
          */
-        const val DEFAULT_MODEL_ASSET = "models/ggml-small.bin"
+        const val DEFAULT_MODEL_ASSET = "models/ggml-small-q5_1.bin"
 
         init {
             System.loadLibrary("whisper_jni")

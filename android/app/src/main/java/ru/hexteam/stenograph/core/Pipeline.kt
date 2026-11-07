@@ -37,20 +37,36 @@ class Pipeline(
         val started = System.currentTimeMillis()
 
         onStage(PipelineStage.ASR)
-        val segments = asr.transcribe(audioPath)
+        // Память: модели весят много (ASR ~190 МБ, диаризация ~40 МБ,
+        // LLM ~478 МБ). Держать их одновременно нельзя — на длинной записи
+        // Android убивает процесс. Поэтому каждая модель выгружается сразу
+        // после своего этапа, а результат этапа остаётся в обычных объектах.
+        val segments = try {
+            asr.transcribe(audioPath)
+        } finally {
+            asr.release()
+        }
         if (segments.isEmpty()) {
             return Result(emptyList(), TranscriptJson.toJson(emptyList()), 0L, 0L)
         }
 
         onStage(PipelineStage.DIARIZATION)
-        val speakers = diarization.diarize(audioPath, expectedSpeakers)
+        val speakers = try {
+            diarization.diarize(audioPath, expectedSpeakers)
+        } finally {
+            diarization.release()
+        }
 
         onStage(PipelineStage.MERGE)
         var lines = Merge.merge(segments, speakers)
 
         if (useLlm && lines.isNotEmpty()) {
             onStage(PipelineStage.LLM)
-            lines = applyLlm(lines)
+            lines = try {
+                applyLlm(lines)
+            } finally {
+                llm.release()
+            }
         }
 
         onStage(PipelineStage.DONE)

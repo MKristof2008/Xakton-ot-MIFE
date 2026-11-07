@@ -35,10 +35,55 @@ class PipelineE2ETest {
         return target
     }
 
+    /**
+     * Реальная запись пользователя (54 с, mp3) — воспроизводит падение
+     * на длинной записи: раньше процесс убивало по памяти на середине.
+     */
+    @Test
+    fun userRecording(): Unit = runBlocking {
+        val target = File(context.cacheDir, "user_voice.mp3")
+        if (!target.isFile || target.length() == 0L) {
+            testContext.assets.open("user_voice.mp3").use { input ->
+                target.outputStream().use { out -> input.copyTo(out) }
+            }
+        }
+        val pipeline = EnginesFactory.create(context)
+        val started = System.currentTimeMillis()
+        val result = pipeline.run(target.absolutePath, useLlm = true)
+        val elapsed = System.currentTimeMillis() - started
+        Log.i("E2E", "USER реплик=${result.lines.size} время=${elapsed}мс rtf=${"%.3f".format(result.rtf)}")
+        result.lines.take(3).forEach { Log.i("E2E", "USER ${it.speakerId} ${it.startMs}-${it.endMs} ${it.text}") }
+        check(result.lines.isNotEmpty()) { "пустая расшифровка на реальной записи" }
+    }
+
+    /** Длинная запись (2.5 МБ mp3): проверка, что не убивает по памяти. */
+    @Test
+    fun longRecording(): Unit = runBlocking {
+        val target = File(context.cacheDir, "user_long.mp3")
+        if (!target.isFile || target.length() == 0L) {
+            testContext.assets.open("user_long.mp3").use { input ->
+                target.outputStream().use { out -> input.copyTo(out) }
+            }
+        }
+        val pipeline = EnginesFactory.create(context)
+        val started = System.currentTimeMillis()
+        val result = pipeline.run(target.absolutePath, useLlm = true)
+        val elapsed = System.currentTimeMillis() - started
+        val peakMb = File("/proc/self/status").readLines()
+            .firstOrNull { it.startsWith("VmHWM") }?.filter { it.isDigit() }
+            ?.toLongOrNull()?.div(1024)
+        Log.i(
+            "E2E",
+            "LONG реплик=${result.lines.size} время=${elapsed}мс " +
+                "rtf=${"%.3f".format(result.rtf)} peak_ram_mb=$peakMb",
+        )
+        check(result.lines.isNotEmpty()) { "пустая расшифровка на длинной записи" }
+    }
+
     @Test
     fun fullPipeline(): Unit = runBlocking {
         val modelName = InstrumentationRegistry.getArguments()
-            .getString("model") ?: "ggml-small.bin"
+            .getString("model") ?: "ggml-small-q5_1.bin"
         val pipeline = EnginesFactory.create(context, asrModel = "models/$modelName")
         Log.i("E2E", "модель ASR: $modelName")
         val stages = mutableListOf<PipelineStage>()

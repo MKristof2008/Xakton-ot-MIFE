@@ -22,9 +22,11 @@ get() { # url target
     curl -fL --retry 3 -o "$2" "$1"
 }
 
-echo "[1/3] Whisper small (multilingual, ru) — 465 МБ"
-get "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin" ggml-small.bin
-cp ggml-small.bin "$ASSETS/ggml-small.bin"
+# Квантованная small (q5_1): 181 МБ вместо 465 при потере WER 0.170 -> 0.178.
+# Замер на устройстве, 20 записей VoxForge RU — docs/benchmarks/measurements.csv.
+echo "[1/3] Whisper small q5_1 (multilingual, ru) — 181 МБ"
+get "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin" ggml-small-q5_1.bin
+cp ggml-small-q5_1.bin "$ASSETS/ggml-small-q5_1.bin"
 
 echo "[2/3] Диаризация: pyannote segmentation-3.0 + 3D-Speaker ERes2Net"
 get "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2" seg.tar.bz2
