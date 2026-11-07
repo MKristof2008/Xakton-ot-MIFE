@@ -66,6 +66,9 @@ class AppState(private val context: Context) : ViewModel() {
     private var job: Job? = null
     @Volatile private var cancelled = false
 
+    /** Число говорящих, с которым запускалась последняя обработка (для повтора). */
+    private var lastSpeakers: Int? = null
+
     fun installModels() {
         viewModelScope.launch {
             modelsMessage = "Распаковываем модели…"
@@ -91,6 +94,9 @@ class AppState(private val context: Context) : ViewModel() {
         if (job?.isActive == true) return
         audioUri = uri
         fileName = displayName
+        // Запоминаем выбор «Сколько человек в записи», чтобы «Попробовать
+        // снова» после отмены не сбрасывал его на автоопределение.
+        lastSpeakers = speakers
         screen = Screen.PROCESSING
         error = null
         cancelled = false
@@ -245,7 +251,7 @@ class AppState(private val context: Context) : ViewModel() {
             return
         }
         cancelled = false
-        start(uri, fileName, null)
+        start(uri, fileName, lastSpeakers)
     }
 
     fun backToImport() {
