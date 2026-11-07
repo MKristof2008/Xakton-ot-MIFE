@@ -39,6 +39,9 @@ object Grammar {
         var s = text.trim()
         if (s.isEmpty()) return s
 
+        // Петли декодера режем ДО правил пунктуации: иначе «ни-ни-ни»
+        // превращается в «ни-ни-ни» с запятыми и выглядит ещё хуже.
+        s = TextQuality.collapseRepeats(s)
         s = dropDecoderNoise(s)
         s = normalizeSpaces(s)
         s = restoreSentenceBoundaries(s)

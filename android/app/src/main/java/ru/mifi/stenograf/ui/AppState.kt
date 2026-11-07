@@ -39,6 +39,17 @@ class AppState(private val context: Context) : ViewModel() {
     var modelsMessage by mutableStateOf(ModelStore.describe(context))
         private set
 
+    init {
+        // Модели в APK могут обновиться (например, base -> small). Досыпаем
+        // недостающие при старте, иначе приложение молча работает на старых.
+        if (!modelsReady) installModels()
+        else viewModelScope.launch {
+            withContext(Dispatchers.IO) { ModelStore.installFromAssets(context) }
+            modelsReady = ModelStore.isReady(context)
+            modelsMessage = ModelStore.describe(context)
+        }
+    }
+
     private var job: Job? = null
     @Volatile private var cancelled = false
 

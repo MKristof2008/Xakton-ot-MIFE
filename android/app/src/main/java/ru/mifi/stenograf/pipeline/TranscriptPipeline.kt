@@ -173,10 +173,16 @@ class TranscriptPipeline(private val context: Context) {
                 // на них Whisper выдаёт выдуманный текст («Мника», «ПОСИЗА»),
                 // который потом неотличим от настоящей короткой реплики.
                 if (slice.size < MIN_UTTERANCE_SAMPLES) continue
-                val segs = engine.transcribe(slice).filter { seg ->
-                    // Отдельно отсекаем короткий выдуманный текст внутри длинного куска.
-                    !isLikelyHallucination(seg.text, seg.endMs - seg.startMs)
-                }
+                val segs = engine.transcribe(slice)
+                    .filter { seg ->
+                        // Короткий выдуманный текст внутри длинного куска.
+                        !isLikelyHallucination(seg.text, seg.endMs - seg.startMs)
+                    }
+                    .filter { seg ->
+                        // Петли декодера («ни-ни-ни», «дыхки лым как гей лы»):
+                        // такой сегмент ничего не сообщает, лучше пропустить.
+                        !ru.mifi.stenograf.llm.TextQuality.isDegenerate(seg.text)
+                    }
                 if (segs.isNotEmpty()) {
                     val shifted = segs.map { s ->
                         s.copy(startMs = s.startMs + u.startMs, endMs = s.endMs + u.startMs)

@@ -56,7 +56,8 @@ Gradle 8.7, AGP 8.5.2, Kotlin 2.0.21.
 
 | Модель | Файл в `assets/models` | Размер | Лицензия |
 |---|---|---|---|
-| Whisper base int8 (multilingual) | `asr/whisper-base-*.onnx` | 152 МБ | MIT |
+| Whisper small int8 (multilingual) | `asr/whisper-small-*.onnx` | 374 МБ | MIT |
+| Whisper base int8 (запасной) | `asr/whisper-base-*.onnx` | 152 МБ | MIT |
 | pyannote segmentation 3.0 | `diar/segmentation-3.0.onnx` | 5.7 МБ | MIT |
 | 3D-Speaker ERes2Net | `diar/3dspeaker_eres2net.onnx` | 38 МБ | Apache-2.0 |
 
@@ -105,7 +106,8 @@ Gradle 8.7, AGP 8.5.2, Kotlin 2.0.21.
 ## Ограничения
 
 1. Только `arm64-v8a` — эмулятор x86 не подойдёт, нужен реальный телефон.
-2. Whisper `base` — компромисс. Для точности важнее `small`, но RTF вырастет втрое.
+2. Whisper `small` выбран по замерам: WER на шумной записи 0.154 против 0.346 у `base`.
+   Цена — ASR 68 с вместо 23 с на 96 с аудио и +210 МБ в APK.
 3. Диаризация чувствительна к числу говорящих: авторежим ошибается на 4+; если известно — указывайте вручную.
 4. Модель 3D-Speaker обучена на китайском/английском; на русской речи работает, но уступает pyannote 3.1 на ПК.
 5. Первый запуск распаковывает ~200 МБ из assets — 10–30 секунд.

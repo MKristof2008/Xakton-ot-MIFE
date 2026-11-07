@@ -44,19 +44,20 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
     private fun ensureLoaded(): OfflineRecognizer =
         recognizer ?: run {
             val dir = ModelStore.asrDir(appContext)
+            val variant = ModelStore.activeAsrVariant(appContext)
             val cfg = OfflineRecognizerConfig(
                 featConfig = FeatureConfig(sampleRate = 16_000, featureDim = 80),
                 modelConfig = OfflineModelConfig(
                     whisper = OfflineWhisperModelConfig(
-                        encoder = dir.resolve(ModelStore.WHISPER_ENCODER).apply { ensure() }.absolutePath,
-                        decoder = dir.resolve(ModelStore.WHISPER_DECODER).apply { ensure() }.absolutePath,
+                        encoder = dir.resolve(ModelStore.encoderName(variant)).apply { ensure() }.absolutePath,
+                        decoder = dir.resolve(ModelStore.decoderName(variant)).apply { ensure() }.absolutePath,
                         language = "ru",
                         task = "transcribe",
                         // Таймкоды по токенам нужны для честной разбивки на реплики.
                         enableTokenTimestamps = true,
                         enableSegmentTimestamps = true,
                     ),
-                    tokens = dir.resolve(ModelStore.WHISPER_TOKENS).apply { ensure() }.absolutePath,
+                    tokens = dir.resolve(ModelStore.tokensName(variant)).apply { ensure() }.absolutePath,
                     modelType = "whisper",
                     numThreads = threads,
                     provider = "cpu",
