@@ -161,6 +161,24 @@ fun ResultScreen(
                     )
                 }
             }
+            // Пустая расшифровка — не «сломалось», а «в записи не нашлось речи».
+            // Раньше экран просто показывал заголовок и пустоту, и было
+            // непонятно, обработался файл или нет.
+            if (shown.isEmpty()) {
+                item {
+                    Text(
+                        if (result.replicas.isEmpty()) {
+                            "В записи не найдено речи. Проверьте, что звук не выключен " +
+                                "и микрофон не был закрыт; тишина и ровный шум отбрасываются."
+                        } else {
+                            "По запросу «$query» ничего не найдено."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
+                    )
+                }
+            }
             itemsIndexed(shown, key = { _, r -> "${r.startMs}-${r.speakerId}" }) { index, rep ->
                 // Каскад: каждая реплика появляется с задержкой по индексу.
                 // На демо это читается как «система думает и выдаёт результат».
