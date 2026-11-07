@@ -23,7 +23,34 @@ object ModelStore {
      */
     const val PREFERRED_ASR = "small"
 
-    val ASR_VARIANTS = listOf("small", "base")
+    // Whisper оставляем только как запасной/эталон: base удалён, он хуже small
+    // по всем замерам и занимал 160 МБ в APK.
+    val ASR_VARIANTS = listOf("small")
+
+    /**
+     * Русская модель Vosk (Apache-2.0), портированная в sherpa-onnx.
+     * Обучена только на русском — знает разговорную лексику и мат, не уходит
+     * в английские петли, как Whisper. Основной движок по умолчанию.
+     */
+    data class ModelFiles(
+        val encoder: String,
+        val decoder: String,
+        val joiner: String,
+        val tokens: String,
+    ) {
+        fun files(dir: File): List<File> =
+            listOf(encoder, decoder, joiner, tokens).map { File(dir, it) }
+    }
+
+    val RU_MODEL = ModelFiles(
+        encoder = "ru-zipformer-encoder.int8.onnx",
+        decoder = "ru-zipformer-decoder.onnx",
+        joiner = "ru-zipformer-joiner.int8.onnx",
+        tokens = "ru-zipformer-tokens.txt",
+    )
+
+    fun whisperFiles(dir: File, variant: String): List<File> =
+        listOf(encoderName(variant), decoderName(variant), tokensName(variant)).map { File(dir, it) }
 
     fun encoderName(variant: String) = "whisper-$variant-encoder.int8.onnx"
     fun decoderName(variant: String) = "whisper-$variant-decoder.int8.onnx"
@@ -49,11 +76,11 @@ object ModelStore {
 
     /** true, если основные модели ASR и диаризации на месте. */
     fun isReady(context: Context): Boolean {
-        val v = activeAsrVariant(context)
         val asr = asrDir(context)
-        return File(asr, encoderName(v)).exists() &&
-            File(asr, decoderName(v)).exists() &&
-            File(asr, tokensName(v)).exists() &&
+        // Достаточно любой рабочей ASR-модели: русской или Whisper.
+        val asrOk = RU_MODEL.files(asr).all { it.exists() } ||
+            whisperFiles(asr, PREFERRED_ASR).all { it.exists() }
+        return asrOk &&
             File(diarDir(context), SEGMENTATION).exists() &&
             File(diarDir(context), EMBEDDING).exists()
     }
@@ -69,6 +96,9 @@ object ModelStore {
             files += "models/$ASR/${encoderName(v)}" to File(asrDir(context), encoderName(v))
             files += "models/$ASR/${decoderName(v)}" to File(asrDir(context), decoderName(v))
             files += "models/$ASR/${tokensName(v)}" to File(asrDir(context), tokensName(v))
+        }
+        for (name in listOf(RU_MODEL.encoder, RU_MODEL.decoder, RU_MODEL.joiner, RU_MODEL.tokens)) {
+            files += "models/$ASR/$name" to File(asrDir(context), name)
         }
         files += "models/$DIAR/$SEGMENTATION" to File(diarDir(context), SEGMENTATION)
         files += "models/$DIAR/$EMBEDDING" to File(diarDir(context), EMBEDDING)

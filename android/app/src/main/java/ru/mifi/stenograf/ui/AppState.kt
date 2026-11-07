@@ -18,7 +18,7 @@ import ru.mifi.stenograf.pipeline.TranscriptPipeline
 import ru.mifi.stenograf.pipeline.TranscriptResult
 
 /** Экран приложения. */
-enum class Screen { IMPORT, PROCESSING, RESULT, ERROR }
+enum class Screen { IMPORT, RECORD, PROCESSING, RESULT, ERROR }
 
 class AppState(private val context: Context) : ViewModel() {
 
@@ -111,6 +111,16 @@ class AppState(private val context: Context) : ViewModel() {
                 screen = Screen.ERROR
             }
         }
+    }
+
+    /** Старт обработки записанного в приложении файла. */
+    fun startRecorded(file: java.io.File, speakers: Int?) {
+        start(android.net.Uri.fromFile(file), file.name, speakers)
+    }
+
+    fun goRecord() {
+        screen = Screen.RECORD
+        error = null
     }
 
     fun cancel() {

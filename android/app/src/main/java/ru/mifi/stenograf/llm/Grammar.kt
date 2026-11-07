@@ -66,8 +66,10 @@ object Grammar {
     }
 
     private fun normalizeSpaces(s: String): String =
-        s.replace(Regex("[ \\t\\u00a0]+"), " ")
-            .replace(Regex("\\s+([.,!?;:…])"), "$1")
+        // Сначала любые пробельные символы (включая переводы строк из токенов
+        // Whisper) -> один пробел. Иначе реплика приходит с переносом строки.
+        s.replace(Regex("\\s+"), " ")
+            .replace(Regex(" ([.,!?;:…])"), "$1")
             .trim()
 
     /**
@@ -94,11 +96,24 @@ object Grammar {
     private fun insertCommas(s: String): String {
         var out = s
         for (w in PARENTHETICAL) {
-            // «конечно» в середине — выделяем с двух сторон, если ещё не выделено
-            val re = Regex("(?<![,.!?])\\s+${Regex.escape(w)}\\s+(?!,)", RegexOption.IGNORE_CASE)
+            // Вводное слово выделяется запятыми только В СЕРЕДИНЕ предложения.
+            // В начале запятая перед ним не нужна: «Мне кажется, этим стоит
+            // заняться» — а не «Мне, кажется, этим стоит заняться».
+            val re = Regex(
+                "(?<=[\\p{L}\\d,.!?])\\s+${Regex.escape(w)}\\s+(?!,)",
+                RegexOption.IGNORE_CASE,
+            )
             out = re.replace(out) { m ->
-                val before = out.getOrNull(m.range.first - 1)
-                if (before == ',' ) m.value else ", ${m.value.trim()}, "
+                // Вводное слово обособляем только в середине предложения.
+                // В начале реплики не трогаем вообще: любая вставка там
+                // склеивала соседние слова («Мне кажется» -> «Мнекажется»),
+                // а «Мне кажется, этим стоит заняться» и так верно.
+                val prefix = out.substring(0, m.range.first)
+                val lastChar = prefix.trimEnd().lastOrNull()
+                val atStart = prefix.isBlank() ||
+                    (lastChar != null && lastChar in ".!?…")
+                if (atStart || out.getOrNull(m.range.first - 1) == ',') m.value
+                else ", ${m.value.trim()}, "
             }
         }
         for (w in COMMA_BEFORE) {

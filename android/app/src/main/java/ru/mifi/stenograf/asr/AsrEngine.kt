@@ -5,86 +5,139 @@ import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
+import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
 import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
 import ru.mifi.stenograf.model.ModelStore
 import ru.mifi.stenograf.output.AsrSegment
+import java.io.File
 
 /**
- * Распознавание речи на устройстве: sherpa-onnx + Whisper (multilingual, русский).
+ * Движок распознавания с выбором модели.
  *
- * Никакой сети: модель лежит в filesDir, рантайм — нативный sherpa-onnx-jni из AAR.
- * Таймкоды считаются от начала файла: длинное аудио режем на окна по 20 с с
- * перекрытием 2 с, к каждому окну прибавляем его оффсет.
+ * Почему два движка:
+ *  - Whisper multilingual (`small`) — универсальный, хорошо ставит пробелы и
+ *    пунктуацию, но русская лексика у него вторична: разговорные слова и мат
+ *    он восстанавливает «как услышал в английском» и уходит в петли.
+ *  - Zipformer-ru (Vosk model-ru) обучен ТОЛЬКО на русском: знает разговорную
+ *    лексику, мат и сленг, не пытается писать по-английски, быстрее в 3 раза.
+ *    Минус — не ставит знаки и иногда нормализует текст (цифры словами).
+ *
+ * Используем Zipformer-ru для звука, Whisper small — как запасной и эталон
+ * для сравнения качества на своих записях.
  */
-class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
+class AsrEngine(
+    context: Context,
+    private val engine: EngineKind = EngineKind.RU_TRANSDUCER,
+    private val threads: Int = defaultThreads(),
+) {
+
+    enum class EngineKind(val label: String) {
+        RU_TRANSDUCER("zipformer-ru"),
+        WHISPER_SMALL("whisper-small"),
+    }
 
     private val appContext = context.applicationContext
     private var recognizer: OfflineRecognizer? = null
 
     companion object {
-        /**
-         * Длина окна. Whisper обрабатывает окно целиком, поэтому слишком длинное
-         * окно замедляет инференс без выигрыша в точности.
-         */
-        const val WINDOW_SEC = 30f
+        /** BPE-маркер начала слова в словарях sherpa-onnx (U+2581). */
+        private const val MARK = '▁'
 
         /**
-         * Перекрытие окон. Раньше было 2 с, но это давало повтор фраз на границах
-         * и заметно портило WER (движок не может надёжно склеить два прогона:
-         * Whisper на разных окнах пишет одну и ту же фразу по-разному).
-         * Ноль — на стыке возможна потеря одного слова; этим и платим за отсутствие
-         * дублей. Слово-«перебежчик» видно в отчёте как одна вставка/удаление.
+         * Zipformer — неавторегрессионный трансдьюсер: ему не нужны окна и
+         * перекрытия, он обрабатывает запись целиком. 20 с — запас на память.
          */
-        const val OVERLAP_SEC = 0f
+        const val TRANSDUCER_WINDOW_SEC = 20f
+        const val TRANSDUCER_OVERLAP_SEC = 0f
 
-        fun defaultThreads(): Int =
-            Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+        /** Whisper обучен на окнах 30 с. */
+        const val WHISPER_WINDOW_SEC = 30f
+        const val WHISPER_OVERLAP_SEC = 0f
+
+        fun defaultThreads(): Int = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+
+        /** Движок, для которого на устройстве есть веса. */
+        fun availableEngines(context: Context): List<EngineKind> {
+            val dir = ModelStore.asrDir(context)
+            val out = mutableListOf<EngineKind>()
+            if (ModelStore.RU_MODEL.files(dir).all { it.exists() }) out += EngineKind.RU_TRANSDUCER
+            if (ModelStore.whisperFiles(dir, ModelStore.PREFERRED_ASR).all { it.exists() }) {
+                out += EngineKind.WHISPER_SMALL
+            }
+            return out
+        }
     }
 
     private fun ensureLoaded(): OfflineRecognizer =
         recognizer ?: run {
             val dir = ModelStore.asrDir(appContext)
-            val variant = ModelStore.activeAsrVariant(appContext)
-            val cfg = OfflineRecognizerConfig(
-                featConfig = FeatureConfig(sampleRate = 16_000, featureDim = 80),
-                modelConfig = OfflineModelConfig(
-                    whisper = OfflineWhisperModelConfig(
-                        encoder = dir.resolve(ModelStore.encoderName(variant)).apply { ensure() }.absolutePath,
-                        decoder = dir.resolve(ModelStore.decoderName(variant)).apply { ensure() }.absolutePath,
-                        language = "ru",
-                        task = "transcribe",
-                        // Таймкоды по токенам нужны для честной разбивки на реплики.
-                        enableTokenTimestamps = true,
-                        enableSegmentTimestamps = true,
-                    ),
-                    tokens = dir.resolve(ModelStore.tokensName(variant)).apply { ensure() }.absolutePath,
-                    modelType = "whisper",
-                    numThreads = threads,
-                    provider = "cpu",
-                ),
-                decodingMethod = "greedy_search",
-            )
+            val cfg = when (engine) {
+                EngineKind.RU_TRANSDUCER -> {
+                    val m = ModelStore.RU_MODEL
+                    m.files(dir).forEach { require(it.exists()) { "Нет файла модели: ${it.name}" } }
+                    OfflineRecognizerConfig(
+                        featConfig = FeatureConfig(sampleRate = 16_000, featureDim = 80),
+                        modelConfig = OfflineModelConfig(
+                            transducer = OfflineTransducerModelConfig(
+                                encoder = File(dir, m.encoder).absolutePath,
+                                decoder = File(dir, m.decoder).absolutePath,
+                                joiner = File(dir, m.joiner).absolutePath,
+                            ),
+                            tokens = File(dir, m.tokens).absolutePath,
+                            modelType = "transducer",
+                            numThreads = threads,
+                            provider = "cpu",
+                        ),
+                        decodingMethod = "greedy_search",
+                    )
+                }
+
+                EngineKind.WHISPER_SMALL -> {
+                    val variant = ModelStore.PREFERRED_ASR
+                    OfflineRecognizerConfig(
+                        featConfig = FeatureConfig(sampleRate = 16_000, featureDim = 80),
+                        modelConfig = OfflineModelConfig(
+                            whisper = OfflineWhisperModelConfig(
+                                encoder = File(dir, ModelStore.encoderName(variant)).apply {
+                                    require(exists()) { "Нет файла модели: $name" }
+                                }.absolutePath,
+                                decoder = File(dir, ModelStore.decoderName(variant)).apply {
+                                    require(exists()) { "Нет файла модели: $name" }
+                                }.absolutePath,
+                                language = "ru",
+                                task = "transcribe",
+                                enableTokenTimestamps = true,
+                                enableSegmentTimestamps = true,
+                            ),
+                            tokens = File(dir, ModelStore.tokensName(variant)).absolutePath,
+                            modelType = "whisper",
+                            numThreads = threads,
+                            provider = "cpu",
+                        ),
+                        decodingMethod = "greedy_search",
+                    )
+                }
+            }
             OfflineRecognizer(config = cfg).also { recognizer = it }
         }
-
-    private fun java.io.File.ensure() {
-        require(exists()) { "Нет файла модели: $absolutePath" }
-    }
 
     /**
      * @param samples PCM float32, 16 кГц, моно.
      * @return сегменты с временем от начала записи.
      */
     fun transcribe(samples: FloatArray, onProgress: (Float) -> Unit = {}): List<AsrSegment> {
-        val rec = ensureLoaded()
-        val windowSize = (WINDOW_SEC * 16_000).toInt()
-        val overlap = (OVERLAP_SEC * 16_000).toInt()
-        val step = windowSize - overlap
         if (samples.isEmpty()) return emptyList()
+        val rec = ensureLoaded()
+        val (windowSec, overlapSec) = when (engine) {
+            EngineKind.RU_TRANSDUCER -> TRANSDUCER_WINDOW_SEC to TRANSDUCER_OVERLAP_SEC
+            EngineKind.WHISPER_SMALL -> WHISPER_WINDOW_SEC to WHISPER_OVERLAP_SEC
+        }
+        val windowSize = (windowSec * 16_000).toInt()
+        val step = (windowSize - (overlapSec * 16_000).toInt()).coerceAtLeast(16_000)
 
         val out = mutableListOf<AsrSegment>()
         var offset = 0
-        var lastEmittedEndMs = -1
+        var lastEnd = -1
 
         while (offset < samples.size) {
             val end = minOf(offset + windowSize, samples.size)
@@ -100,27 +153,20 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
             val text = result.text.trim()
             if (text.isNotEmpty()) {
                 val ts = result.timestamps
-                // timestamps — сикунды в пределах окна (если включены)
-                if (ts.isNotEmpty() && ts.size > 1) {
-                    for (seg in splitIntoSegments(result.tokens, ts, text)) {
-                        val sMs = chunkStartMs + (seg.first * 1000).toInt()
-                        val eMs = chunkStartMs + (seg.second * 1000).toInt()
-                        // Окна перекрываются, поэтому начало нового окна повторяет
-                        // хвост предыдущего. Отрезаем только совпавший префикс, а
-                        // остаток фразы сохраняем — терять новую речь нельзя.
-                        val fresh = trimRepeatedPrefix(seg.third, out)
-                        if (fresh.isNotBlank() && eMs > lastEmittedEndMs) {
-                            out += AsrSegment(maxOf(sMs, 0), eMs, fresh)
-                            lastEmittedEndMs = maxOf(lastEmittedEndMs, eMs)
-                        }
+                val pieces: List<Triple<Float, Float, String>> =
+                    if (ts.size > 1 && result.tokens.size == ts.size) {
+                        splitIntoSegments(result.tokens, ts, text)
+                    } else {
+                        listOf(Triple(0f, (chunk.size * 1000 / 16_000) / 1000f, text))
                     }
-                } else {
-                    val sMs = chunkStartMs
-                    val eMs = chunkStartMs + chunk.size * 1000 / 16_000
-                    val fresh = trimRepeatedPrefix(text, out)
-                    if (fresh.isNotBlank() && eMs > lastEmittedEndMs) {
-                        out += AsrSegment(sMs, eMs, fresh)
-                        lastEmittedEndMs = eMs
+                for (seg in pieces) {
+                    val sMs = chunkStartMs + (seg.first * 1000).toInt()
+                    val eMs = chunkStartMs + (seg.second * 1000).toInt()
+                    if (eMs <= lastEnd + 100) continue
+                    val fresh = trimRepeatedPrefix(seg.third, out)
+                    if (fresh.isNotBlank()) {
+                        out += AsrSegment(maxOf(sMs, 0), eMs, fresh)
+                        lastEnd = maxOf(lastEnd, eMs)
                     }
                 }
             }
@@ -132,19 +178,12 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
         return out.filter { it.text.isNotBlank() && it.endMs > it.startMs }
     }
 
-    /**
-     * Группирует токены в сегменты Whisper по паузам: токены с extremely
-     * большим разрывом начинают новую фразу. Возвращает (start, end, text).
-     */
+    /** Группирует токены в фразы по паузам > 1 с. */
     private fun splitIntoSegments(
         tokens: Array<String>,
         ts: FloatArray,
         fullText: String,
     ): List<Triple<Float, Float, String>> {
-        if (tokens.size != ts.size) {
-            val endSec = ts.lastOrNull() ?: fullText.length.toFloat()
-            return listOf(Triple(ts.firstOrNull() ?: 0f, endSec, fullText))
-        }
         val out = mutableListOf<Triple<Float, Float, String>>()
         var buf = StringBuilder()
         var segStart = ts.firstOrNull() ?: 0f
@@ -152,36 +191,36 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
         for (i in tokens.indices) {
             val t = ts[i]
             if (buf.isNotEmpty() && (t - prevEnd) > 1.0f) {
-                out += Triple(segStart, prevEnd, buf.toString().trim())
+                out += Triple(segStart, prevEnd, tidyText(buf.toString()))
                 buf = StringBuilder()
                 segStart = t
             }
-            // sherpa-onnx отдаёт BPE-токены: граница слова может быть закодирована
-            // как `▁` внутри токена. При простой конкатенации получается
-            // «релизомобильного» вместо «релиза мобильного», поэтому вставляем
-            // пробел там, где токен начинается без него.
-            val piece = tokens[i].replace('▁', ' ')
-            if (buf.isNotEmpty() && piece.isNotEmpty() &&
-                !piece.startsWith(" ") && !buf.last().isWhitespace() && !buf.last().isPunctuation()
-            ) {
+            // BPE-токены: граница слова закодирована символом `▁` В НАЧАЛЕ токена.
+            // Он же означает «здесь начинается новое слово». Один `▁` — это
+            // пробел перед словом; сам символ в текст не попадает.
+            // Раньше он заменялся на пробел ВНУТРИ токена, из-за чего получалось
+            // «До б ры й д ень» вместо «Добрый день».
+            val raw = tokens[i]
+            val startsWord = raw.startsWith(MARK)
+            val piece = raw.replace(MARK.toString(), "")
+            if (piece.isEmpty()) {
+                prevEnd = t
+                continue
+            }
+            if (buf.isNotEmpty() && startsWord && !buf.last().isWhitespace()) {
                 buf.append(' ')
             }
             buf.append(piece)
             prevEnd = t
         }
-        if (buf.isNotEmpty()) out += Triple(segStart, prevEnd, buf.toString().trim())
+        if (buf.isNotEmpty()) out += Triple(segStart, prevEnd, tidyText(buf.toString()))
         return out.filter { it.third.isNotBlank() }.ifEmpty {
             listOf(Triple(ts.firstOrNull() ?: 0f, ts.lastOrNull() ?: 0f, fullText))
         }
     }
 
-    /** Знак препинания: пробел перед ним не нужен. */
     private fun Char.isPunctuation(): Boolean = this in ".,!?;:…—–)"
 
-    /**
-     * Приводит строку из токенов к виду обычной письменной речи: убирает
-     * лишние пробелы и пробелы перед знаками препинания.
-     */
     private fun tidyText(raw: String): String {
         var s = raw.replace(Regex("[ \\t]+"), " ").trim()
         if (s.isEmpty()) return s
@@ -190,27 +229,18 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
         return s
     }
 
-    /**
-     * Отрезает от начала нового сегмента те слова, которыми уже закончился
-     * принятый текст: так уходит повтор из-за перекрытия окон, но новая речь
-     * в конце фразы сохраняется. Сравнение по нормализованным словам, потому что
-     * Whisper на границе окна пишет ту же фразу с другой пунктуацией.
-     */
+    /** Отрезает повтор слов из перекрытия окон (для Whisper). */
     private fun trimRepeatedPrefix(text: String, already: List<AsrSegment>): String {
         if (already.isEmpty()) return text
-        // Перекрытие — 1–2 секунды речи, это самое большее два последних сегмента.
         val oldWords = words(already.takeLast(2).joinToString(" ") { it.text })
         if (oldWords.isEmpty()) return text
-
         val raw = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
         val newNorm = raw.map { normalizeWord(it) }.filter { it.isNotEmpty() }
         if (newNorm.isEmpty()) return text
-
         val maxN = minOf(oldWords.size, newNorm.size)
         var cutRaw = 0
         for (n in maxN downTo 2) {
             if (oldWords.subList(oldWords.size - n, oldWords.size) == newNorm.subList(0, n)) {
-                // Переводим «n нормализованных слов» в число исходных токенов.
                 var seen = 0
                 var i = 0
                 while (i < raw.size && seen < n) {
@@ -221,15 +251,13 @@ class AsrEngine(context: Context, private val threads: Int = defaultThreads()) {
                 break
             }
         }
-        if (cutRaw == 0) return text
-        return raw.drop(cutRaw).joinToString(" ")
+        return if (cutRaw == 0) text else raw.drop(cutRaw).joinToString(" ")
     }
 
     private fun words(s: String): List<String> =
         s.split(Regex("\\s+")).map { normalizeWord(it) }.filter { it.isNotEmpty() }
 
-    private fun normalizeWord(w: String): String =
-        w.lowercase().filter { it.isLetterOrDigit() }
+    private fun normalizeWord(w: String): String = w.lowercase().filter { it.isLetterOrDigit() }
 
     fun close() {
         recognizer?.release()

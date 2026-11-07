@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -31,6 +32,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -53,6 +55,7 @@ import androidx.compose.ui.unit.dp
 fun ImportScreen(
     state: AppState,
     onPickFile: (Uri, String, Int?) -> Unit,
+    onRecord: () -> Unit = {},
 ) {
     var speakersAuto by remember { mutableStateOf(true) }
     var speakersCount by remember { mutableStateOf(2) }
@@ -80,7 +83,10 @@ fun ImportScreen(
         HeroHeader()
         Spacer(Modifier.height(4.dp))
 
-        ImportCard(onPick = { picker.launch(arrayOf("audio/*", "video/*")) })
+        ImportCard(
+            onPick = { picker.launch(arrayOf("audio/*", "video/*")) },
+            onRecord = onRecord,
+        )
 
         SpeakersCard(
             auto = speakersAuto,
@@ -156,7 +162,7 @@ private fun HeroHeader() {
 }
 
 @Composable
-private fun ImportCard(onPick: () -> Unit) {
+private fun ImportCard(onPick: () -> Unit, onRecord: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -181,6 +187,15 @@ private fun ImportCard(onPick: () -> Unit) {
                 Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Text("Выбрать запись", style = MaterialTheme.typography.labelLarge)
+            }
+            OutlinedButton(
+                onClick = onRecord,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Записать голос", style = MaterialTheme.typography.labelLarge)
             }
             Text(
                 "mp3 · wav · m4a · ogg · flac и видеофайлы — конвертация встроенная",

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import ru.mifi.stenograf.asr.AsrEngine
+import ru.mifi.stenograf.asr.EngineSelector
 import ru.mifi.stenograf.audio.AudioDecoder
 import ru.mifi.stenograf.audio.Denoise
 import ru.mifi.stenograf.diar.Diarizer
@@ -94,6 +95,7 @@ class TranscriptPipeline(private val context: Context) {
     fun run(
         uri: Uri,
         numSpeakers: Int?,
+        engineKind: AsrEngine.EngineKind = EngineSelector.resolve(AsrEngine.availableEngines(context)),
         onProgress: (PipelineProgress) -> Unit = {},
         isCancelled: () -> Boolean = { false },
     ): TranscriptResult {
@@ -162,7 +164,7 @@ class TranscriptPipeline(private val context: Context) {
         report(Stage.ASR, 0f, "Распознаём речь (${utterances.size} реплик)")
         t = System.currentTimeMillis()
         val recognized = mutableListOf<Pair<SpeakerTurn, List<AsrSegment>>>()
-        val engine = AsrEngine(context)
+        val engine = AsrEngine(context, engineKind)
         try {
             var processedMs = 0L
             val totalMs = utterances.sumOf { (it.endMs - it.startMs).toLong() }.coerceAtLeast(1)

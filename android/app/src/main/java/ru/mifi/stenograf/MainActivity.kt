@@ -22,6 +22,7 @@ import ru.mifi.stenograf.output.HexJson
 import ru.mifi.stenograf.ui.AppState
 import ru.mifi.stenograf.ui.ImportScreen
 import ru.mifi.stenograf.ui.ProcessingScreen
+import ru.mifi.stenograf.ui.RecordScreen
 import ru.mifi.stenograf.ui.ResultScreen
 import ru.mifi.stenograf.ui.Screen
 import ru.mifi.stenograf.ui.StenografTheme
@@ -86,6 +87,11 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
         Screen.IMPORT -> ImportScreen(
             state = state,
             onPickFile = { uri: Uri, name: String, speakers: Int? -> state.start(uri, name, speakers) },
+            onRecord = { state.goRecord() },
+        )
+        Screen.RECORD -> RecordScreen(
+            state = state,
+            onRecorded = { file, speakers -> state.startRecorded(file, speakers) },
         )
         Screen.PROCESSING -> ProcessingScreen(state)
         Screen.RESULT -> ResultScreen(
