@@ -23,6 +23,11 @@ object AudioDecoder {
     }
 
     fun decode(context: Context, uri: Uri): Pcm {
+        // WAV читаем напрямую: MediaExtractor на части устройств не умеет
+        // открывать raw PCM («Failed to instantiate extractor»), а запись
+        // с микрофона у нас именно в WAV 16 кГц — это самый частый путь.
+        if (isWav(context, uri)) return decodeWav(context, uri)
+
         val extractor = MediaExtractor()
         try {
             // file:// приходит при отладочных прогонах и из некоторых файловых менеджеров;
@@ -113,6 +118,104 @@ object AudioDecoder {
             extractor.release()
         }
     }
+
+    /** Быстрая проверка по первым байтам: RIFF....WAVE. */
+    private fun isWav(context: Context, uri: Uri): Boolean = runCatching {
+        val head = openInput(context, uri)?.use { it.readNBytes(12) } ?: return@runCatching false
+        head.size >= 12 &&
+            String(head, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+            String(head, 8, 4, Charsets.US_ASCII) == "WAVE"
+    }.getOrDefault(false)
+
+    private fun openInput(context: Context, uri: Uri): java.io.InputStream? = when (uri.scheme) {
+        "file" -> uri.path?.let { java.io.FileInputStream(it) }
+        else -> context.contentResolver.openInputStream(uri)
+    }
+
+    /**
+     * Разбор WAV вручную: ищем чанк `fmt ` для формата и `data` для сэмплов.
+     * Понимаем 8/16/24/32-битный PCM и float32 — запись с микрофона даёт 16 бит,
+     * но файлы пользователя бывают любые.
+     */
+    private fun decodeWav(context: Context, uri: Uri): Pcm {
+        val bytes = openInput(context, uri)?.use { it.readBytes() }
+            ?: error("Не удалось открыть файл: $uri")
+        require(bytes.size > 44) { "Файл слишком короткий: $uri" }
+
+        var pos = 12
+        var channels = 1
+        var rate = TARGET_RATE
+        var bits = 16
+        var format = 1 // 1 = PCM, 3 = IEEE float
+        var dataOffset = -1
+        var dataLen = 0
+
+        while (pos + 8 <= bytes.size) {
+            val id = String(bytes, pos, 4, Charsets.US_ASCII)
+            val size = le32(bytes, pos + 4)
+            val body = pos + 8
+            when (id) {
+                "fmt " -> if (body + 16 <= bytes.size) {
+                    format = le16(bytes, body)
+                    channels = le16(bytes, body + 2)
+                    rate = le32(bytes, body + 4)
+                    bits = le16(bytes, body + 14)
+                }
+                "data" -> {
+                    dataOffset = body
+                    dataLen = size.coerceAtMost(bytes.size - body)
+                }
+            }
+            // Чанки выравниваются по чётной границе (RIFF).
+            pos = body + size + (size and 1)
+        }
+        require(dataOffset >= 0 && dataLen > 0) { "В WAV нет чанка data: $uri" }
+
+        val bytesPerSample = (bits / 8).coerceAtLeast(1)
+        val frames = dataLen / (bytesPerSample * channels)
+        val mono = FloatArray(frames)
+
+        for (i in 0 until frames) {
+            var acc = 0f
+            for (c in 0 until channels) {
+                val o = dataOffset + (i * channels + c) * bytesPerSample
+                val v = when {
+                    format == 3 && bits == 32 -> {
+                        val bitsInt = le32(bytes, o)
+                        Float.fromBits(bitsInt)
+                    }
+                    bits == 16 -> le16s(bytes, o) / 32768f
+                    bits == 8 -> (bytes[o].toInt() and 0xFF) / 128f - 1f
+                    bits == 24 -> {
+                        val raw = (bytes[o].toInt() and 0xFF) or
+                            ((bytes[o + 1].toInt() and 0xFF) shl 8) or
+                            ((bytes[o + 2].toInt() and 0xFF) shl 16)
+                        // Знаковое расширение из 24 бит.
+                        val signed = (raw shl 8) shr 8
+                        signed / 8388608f
+                    }
+                    bits == 32 -> le32(bytes, o) / 2147483648f
+                    else -> 0f
+                }
+                acc += v
+            }
+            mono[i] = acc / channels
+        }
+
+        val resampled = if (rate == TARGET_RATE) mono else resample(mono, rate, TARGET_RATE)
+        return Pcm(normalize(resampled), TARGET_RATE)
+    }
+
+    private fun le16(b: ByteArray, o: Int): Int =
+        (b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8)
+
+    private fun le16s(b: ByteArray, o: Int): Int = le16(b, o).toShort().toInt()
+
+    private fun le32(b: ByteArray, o: Int): Int =
+        (b[o].toInt() and 0xFF) or
+            ((b[o + 1].toInt() and 0xFF) shl 8) or
+            ((b[o + 2].toInt() and 0xFF) shl 16) or
+            ((b[o + 3].toInt() and 0xFF) shl 24)
 
     private fun concat(parts: List<FloatArray>): FloatArray {
         val total = parts.sumOf { it.size }

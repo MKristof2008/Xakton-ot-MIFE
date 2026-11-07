@@ -7,6 +7,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
@@ -34,6 +35,18 @@ class VoiceRecorder(private val context: Context) {
     }
 
     private var record: AudioRecord? = null
+    private var finished = CompletableDeferred<Unit>().apply { complete(Unit) }
+
+    /**
+     * Дождаться завершения записи и дописывания WAV-заголовка.
+     *
+     * Проверять [running] здесь НЕЛЬЗЯ: [stop] выставляет его в false первым делом,
+     * поэтому метод возвращался мгновенно, до того как файл получал RIFF-заголовок.
+     * Ориентируемся только на [finished], который заполняется в самом конце.
+     */
+    suspend fun awaitFinished() {
+        finished.await()
+    }
     @Volatile private var running = false
 
     /** Длительность последней записи в мс (по числу записанных сэмплов). */
@@ -60,6 +73,7 @@ class VoiceRecorder(private val context: Context) {
             }
 
             record = recorder
+            finished = CompletableDeferred()
             running = true
             durationMs = 0L
 
@@ -99,6 +113,7 @@ class VoiceRecorder(private val context: Context) {
                 record = null
                 running = false
                 raf.close()
+                finished.complete(Unit)
             }
         }
 

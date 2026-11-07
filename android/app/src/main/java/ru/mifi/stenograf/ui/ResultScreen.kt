@@ -127,7 +127,7 @@ private fun MetricsRow(result: TranscriptResult) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         MetricTile(
             value = Replica.timecode(result.durationMs.toInt()),
-            label = "длительность",
+            label = "длина",
             modifier = Modifier.weight(1f),
         )
         MetricTile(
@@ -164,6 +164,7 @@ private fun MetricTile(
             Text(
                 value,
                 style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
                 color = if (highlight) MaterialTheme.colorScheme.secondary
                 else MaterialTheme.colorScheme.onSurface,
             )
@@ -171,6 +172,8 @@ private fun MetricTile(
                 label,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }
     }

@@ -8,6 +8,10 @@
       Это проверяемое доказательство офлайн-работы — смотреть в собранном APK.
       ASR, диаризация и LLM выполняются локально.
     -->
+    <!-- Запись голоса из приложения («голосовое»): нужен доступ к микрофону. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Сеть не нужна и запрещена заданием — удаляем даже то, что тянут библиотеки. -->
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 

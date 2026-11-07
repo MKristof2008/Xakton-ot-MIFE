@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +70,7 @@ fun RecordScreen(
     var elapsedMs by remember { mutableStateOf(0L) }
     var level by remember { mutableStateOf(0f) }
     var error by remember { mutableStateOf<String?>(null) }
+    var recordFile by remember { mutableStateOf<java.io.File?>(null) }
 
     val recorder = remember { VoiceRecorder(context) }
     val recordScope = rememberCoroutineScope()
@@ -89,6 +91,7 @@ fun RecordScreen(
         error = null
         recording = true
         // Запись идёт в IO-корутине; таймер и уровень обновляются из колбэка.
+        recordFile = file
         recordScope.launch {
             runCatching {
                 recorder.recordTo(file) { ms ->
@@ -130,16 +133,20 @@ fun RecordScreen(
             level = level,
             onClick = {
                 if (recording) {
+                    // Файл читаем ПОСЛЕ того, как корутина записи завершится:
+                    // заголовок WAV дописывается только в самом конце, а пока
+                    // запись идёт, первые 44 байта — нули. Поэтому сначала
+                    // stop(), потом дожидаемся flush(), потом отдаём файл.
                     stop()
-                    val f = java.io.File(context.filesDir, "latest_voice.wav")
-                    // Копию делаем после остановки, когда файл дописан.
-                    val last = context.filesDir.listFiles { f2 -> f2.name.startsWith("voice_") }
-                        ?.maxByOrNull { it.lastModified() }
-                    if (last != null && last.length() > 44) {
-                        last.copyTo(f, overwrite = true)
-                        // Один говорящий по умолчанию: запись с микрофона почти
-                        // всегда монолог. Число можно изменить на экране старта.
-                        onRecorded(f, 1)
+                    recordFile?.let { file ->
+                        recordScope.launch {
+                            // Ждём, пока recordTo вернётся и допишет RIFF-заголовок.
+                            withTimeoutOrNull(3000) { recorder.awaitFinished() }
+                            val ready = java.io.File(context.filesDir, "latest_voice.wav")
+                            runCatching { file.copyTo(ready, overwrite = true) }
+                                .onSuccess { onRecorded(ready, 1) }
+                                .onFailure { error = "Не удалось сохранить запись: ${it.message}" }
+                        }
                     }
                 } else {
                     start()
