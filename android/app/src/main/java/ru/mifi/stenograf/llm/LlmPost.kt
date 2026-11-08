@@ -1,38 +1,32 @@
 package ru.mifi.stenograf.llm
 
 import android.content.Context
-import ai.onnxruntime.genai.SimpleGenAI
-import ru.mifi.stenograf.model.ModelStore
+import android.util.Log
 import ru.mifi.stenograf.output.Replica
-import java.io.File
 
 /**
- * Постобработка текста на локальной LLM (ONNX Runtime GenAI, модель GGUF/ONNX в filesDir).
+ * Постобработка текста на локальной LLM (ONNX Runtime GenAI, модель в filesDir).
  *
  * Ограничения, которые держим жёстко:
  *  - модель только расставляет пунктуацию и регистр;
  *  - ответ проверяется: при расхождении длины > 30 % или потере слов — откат;
  *  - если модель не установлена или упала — работает детерминированный пунктуатор,
  *    пайплайн не падает (транскрипт важнее).
+ *
+ * Движок один на приложение ([LocalModel]): загрузка 800 МБ и ~3 секунды,
+ * держать по копии на каждый экран нельзя.
  */
 class LlmPost(private val context: Context) {
 
-    private var engine: SimpleGenAI? = null
-
     companion object {
-        /** Каталог модели относительно filesDir/models/llm. */
-        const val MODEL_SUBDIR = "phi3-mini"
+        private const val TAG = "StenografLLM"
     }
 
-    private fun modelDir(): File = File(ModelStore.llmDir(context), MODEL_SUBDIR)
-
-    fun isAvailable(): Boolean {
-        val d = modelDir()
-        return d.isDirectory && d.listFiles()?.any { it.name.endsWith(".onnx") || it.name.endsWith(".onnx.data") } == true
-    }
+    fun isAvailable(): Boolean = LocalModel.isAvailable(context)
 
     /**
-     * Прогоняет реплики через локальную LLM. Безопасна для вызова из фонового потока.
+     * Прогоняет реплики через локальную LLM. Синхронная, вызывается из фонового
+     * потока пайплайна — поэтому внутри блокирующая генерация.
      */
     fun polish(replicas: List<Replica>, onProgress: (Float) -> Unit = {}): List<Replica> {
         if (replicas.isEmpty()) return replicas
@@ -42,9 +36,19 @@ class LlmPost(private val context: Context) {
         }
 
         val out = ArrayList<Replica>(replicas.size)
+        Log.i(TAG, "LLM model: ${LocalModel.subdir(context)}, replicas=${replicas.size}")
         for ((i, rep) in replicas.withIndex()) {
             onProgress(i.toFloat() / replicas.size)
-            val fixed = runCatching { askModel(rep.text) }.getOrNull()
+            val t0 = System.currentTimeMillis()
+            val result = runCatching { askModel(rep.text) }
+            val fixed = result.getOrNull()
+            val ms = System.currentTimeMillis() - t0
+            val ok = fixed != null && acceptable(fixed, rep.text)
+            Log.i(
+                TAG,
+                "LLM replica $i: ${ms} ms, model=${if (ok) "yes" else "no"}," +
+                    " error=${result.exceptionOrNull()?.message ?: "-"}, out=${(fixed ?: "").take(60)}",
+            )
             val safe = fixed?.takeIf { acceptable(it, rep.text) } ?: rulePolish(rep.text)
             out += rep.copy(text = safe)
         }
@@ -52,41 +56,13 @@ class LlmPost(private val context: Context) {
         return out
     }
 
-    private fun ensureEngine(): SimpleGenAI {
-        engine?.let { return it }
-        val dir = modelDir()
-        require(dir.isDirectory) { "Нет каталога модели: ${dir.absolutePath}" }
-        val genaiConfig = File(dir, "genai_config.json")
-        val path = if (genaiConfig.exists()) dir.absolutePath else {
-            dir.listFiles()?.firstOrNull { it.name.endsWith(".onnx") }?.absolutePath
-                ?: error("В ${dir.absolutePath} нет модели ONNX Runtime GenAI")
-        }
-        val e = SimpleGenAI(path)
-        engine = e
-        return e
-    }
-
     private fun askModel(text: String): String {
-        val e = ensureEngine()
-        val params = e.createGeneratorParams()
-        // Детерминированно: нам нужна пунктуация, а не вариативность.
-        params.setSearchOption("do_sample", false)
-        params.setSearchOption("max_length", (text.length / 2 + 96).toDouble())
-
-        val prompt = buildString {
-            append("<|user|>")
-            append('\n')
-            append("Восстанови пунктуацию и заглавные буквы в тексте ниже. ")
-            append("Не добавляй и не убирай слова, не перефразируй. ")
-            append("Ответь только исправленным текстом без пояснений.")
-            append("\n\n")
-            append(text)
-            append("\n<|end|>\n<|assistant|>\n")
-        }
-        return e.generate(params, prompt) { }
-            .substringAfter("<|assistant|>")
-            .substringBefore("<|end|>")
-            .substringBefore("\n<|")
+        // Промт короткий: длинная инструкция сама стоит секунды генерации.
+        val prompt = "Пунктуация и заглавные буквы, без изменений слов:\n" + text + "\nОтвет:\n"
+        // Qwen любит дописать «Вот вариант: …» после готового текста.
+        // Первая строка — сам ответ, остальное отбрасываем.
+        return LocalModel.generate(context, prompt, text.length / 2 + 96)
+            .substringBefore('\n')
             .trim()
     }
 
@@ -114,8 +90,5 @@ class LlmPost(private val context: Context) {
     /** Детерминированное восстановление регистра и знаков — без модели (Grammar.kt). */
     fun rulePolish(text: String): String = Grammar.polish(text)
 
-    fun close() {
-        runCatching { engine?.close() }
-        engine = null
-    }
+    fun close() = Unit
 }

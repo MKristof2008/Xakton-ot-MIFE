@@ -203,6 +203,7 @@ private fun SettingsSection(settings: SettingsStore, state: AppState) {
     var historyLimit by remember { mutableStateOf(settings.historyLimit) }
     var language by remember { mutableStateOf(settings.language) }
     var punctuation by remember { mutableStateOf(settings.punctuation) }
+    var localLlm by remember { mutableStateOf(settings.localLlm) }
     var showTimecodes by remember { mutableStateOf(settings.showTimecodes) }
 
     SectionLabel("Звук и отклик")
@@ -276,6 +277,15 @@ private fun SettingsSection(settings: SettingsStore, state: AppState) {
     ) {
         punctuation = it
         settings.punctuation = it
+    }
+
+    ToggleRow(
+        title = "Локальная модель: пунктуация",
+        subtitle = "точнее на сложных фразах, но +7 с на реплику и нагрев телефона",
+        checked = localLlm,
+    ) {
+        localLlm = it
+        settings.localLlm = it
     }
 
     ToggleRow(

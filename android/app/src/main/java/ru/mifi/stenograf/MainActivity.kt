@@ -107,8 +107,19 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
 
     val exportText = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) {
-            val text = HexJson.toText(state.replicas())
+            // Если переводчик использовался — выгружаем вместе с переводами,
+            // иначе теряется то, ради чего человек их делал.
+            val pairs = state.replicasWithTranslations()
+            val text = HexJson.toTextWithTranslations(pairs) { state.speakerLabel(it) }
             context.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+        }
+    }
+
+    // Субтитры: тот же текст, но в SRT — его просят под видео.
+    val exportSrt = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-subrip")) { uri ->
+        if (uri != null) {
+            val srt = HexJson.toSrt(state.replicasWithTranslations()) { state.speakerLabel(it) }
+            context.contentResolver.openOutputStream(uri)?.use { it.write(srt.toByteArray()) }
         }
     }
 
@@ -144,6 +155,7 @@ private fun App(autorunUri: Uri? = null, autorunSpeakers: Int? = null) {
             state = state,
             onExportJson = { exportJson.launch("transcript.json") },
             onExportText = { exportText.launch("transcript.txt") },
+            onExportSrt = { exportSrt.launch("transcript.srt") },
         )
         Screen.ERROR -> ErrorScreen(state)
     }

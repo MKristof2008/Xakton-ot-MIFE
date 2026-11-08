@@ -110,10 +110,12 @@ class AppState(private val context: Context) : ViewModel() {
                         numSpeakers = speakers,
                         language = settings.language,
                         punctuation = settings.punctuation,
+                        localLlm = settings.localLlm,
                         onProgress = { p -> progress = p },
                         isCancelled = { cancelled },
                     )
                 }
+                resetPerTranscript()
                 result = res
                 // Пишем результат на диск: нужно для замеров WER/DER с ПК и для
                 // отладки, когда экран не под рукой. Файл во внутреннем каталоге.
@@ -194,6 +196,7 @@ class AppState(private val context: Context) : ViewModel() {
 
     /** Открыть запись из истории: показываем сохранённый результат и аудио. */
     fun openFromHistory(item: ru.mifi.stenograf.history.HistoryStore.Item) {
+        resetPerTranscript()
         result = TranscriptResult(
             replicas = item.replicas,
             durationMs = item.durationMs,
@@ -217,6 +220,115 @@ class AppState(private val context: Context) : ViewModel() {
     /** Путь к аудиофайлу во внутреннем каталоге (для плеера). */
     var recordedPath by mutableStateOf<String?>(null)
         private set
+
+    
+    // ---------- Перевод ----------
+
+    /**
+     * Переводы по ключу «начало реплики»: таймкоды в рамках одной записи
+     * уникальны, а индекс ломается при фильтрации поиском.
+     * Храним в памяти сессии: перевод — это деньги за батарею, но не данные,
+     * ради которых стоит писать файлы.
+     */
+    var translations by mutableStateOf<Map<Int, String>>(emptyMap())
+        private set
+
+    /** Реплика, которая сейчас переводится (для спиннера на строке). */
+    var translatingStartMs by mutableStateOf<Int?>(null)
+        private set
+
+    var translatingAll by mutableStateOf(false)
+        private set
+
+    var translateError by mutableStateOf<String?>(null)
+        private set
+
+    fun translationFor(rep: Replica): String? = translations[rep.startMs]
+
+    /** Перевести одну реплику. Повторный вызов по той же реплике — из кэша. */
+    fun translate(rep: Replica) {
+        if (translations.containsKey(rep.startMs)) return
+        if (translatingStartMs != null || translatingAll) return
+        translatingStartMs = rep.startMs
+        translateError = null
+        viewModelScope.launch {
+            val tr = withContext(Dispatchers.Default) {
+                ru.mifi.stenograf.llm.Translator.translate(context, rep.text)
+            }
+            translatingStartMs = null
+            if (tr.isNullOrBlank()) {
+                translateError = "Не удалось перевести. Нужна локальная модель в настройках."
+            } else {
+                translations = translations + (rep.startMs to tr)
+            }
+        }
+    }
+
+    /** Перевести все реплики подряд — одной кнопкой, с остановкой по отмене. */
+    fun translateAll(reps: List<Replica>) {
+        if (translatingAll || translatingStartMs != null) return
+        val todo = reps.filter { !translations.containsKey(it.startMs) }
+        if (todo.isEmpty()) return
+        translatingAll = true
+        translateError = null
+        viewModelScope.launch {
+            for (rep in todo) {
+                if (!translatingAll) break
+                val tr = withContext(Dispatchers.Default) {
+                    ru.mifi.stenograf.llm.Translator.translate(context, rep.text)
+                }
+                if (!tr.isNullOrBlank()) translations = translations + (rep.startMs to tr)
+            }
+            translatingAll = false
+        }
+    }
+
+    fun stopTranslateAll() {
+        translatingAll = false
+    }
+
+    fun clearTranslations() {
+        translations = emptyMap()
+        translateError = null
+    }
+
+    fun translationAvailable(): Boolean =
+        ru.mifi.stenograf.llm.Translator.isAvailable(context)
+
+    /** Текст для экспорта: перевод под репликой, если он есть. */
+    fun replicasWithTranslations(): List<Pair<Replica, String?>> =
+        replicas().map { it to translations[it.startMs] }
+
+    // ---------- Имена спикеров ----------
+
+    /**
+     * «Спикер 1» ничего не говорит о человеке. На встрече это Иванов, на
+     * лекции — преподаватель. Имена живут в памяти сессии: они относятся к
+     * конкретной записи и не должны протекать в следующую.
+     */
+    var speakerNames by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    fun speakerLabel(speakerId: String): String {
+        val n = speakerId.substringAfterLast('_')
+        return speakerNames[speakerId]?.takeIf { it.isNotBlank() } ?: "Спикер $n"
+    }
+
+    fun renameSpeaker(speakerId: String, name: String) {
+        val trimmed = name.trim()
+        speakerNames = if (trimmed.isEmpty()) speakerNames - speakerId
+        else speakerNames + (speakerId to trimmed)
+    }
+
+
+    /** Сбросить имена и переводы при смене записи. */
+    private fun resetPerTranscript() {
+        speakerNames = emptyMap()
+        translations = emptyMap()
+        translateError = null
+        translatingAll = false
+        translatingStartMs = null
+    }
 
     fun goRecord() {
         screen = Screen.RECORD

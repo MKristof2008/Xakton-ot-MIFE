@@ -74,4 +74,56 @@ object HexJson {
 
     /** Человекочитаемый текст: "[MM:SS] Спикер N: реплика". */
     fun toText(replicas: List<Replica>): String = replicas.joinToString("\n") { it.displayLine() }
+
+    /**
+     * Тот же текст с переводом под оригиналом и с именами говорящих, если их
+     * задали на экране результата.
+     */
+    fun toTextWithTranslations(
+        pairs: List<Pair<Replica, String?>>,
+        speakerLabel: (String) -> String = { "Спикер ${it.substringAfterLast('_')}" },
+    ): String = pairs.joinToString("\n") { (rep, tr) ->
+        val line = "[${Replica.timecode(rep.startMs)}] ${speakerLabel(rep.speakerId)}: ${rep.text}"
+        if (tr.isNullOrBlank()) line else line + "\n    → " + tr
+    }
+
+    /**
+     * Субтитры SRT: тот же формат, что у YouTube и плееров. Нужен, когда
+     * расшифровку просят «как субтитры к видео», а это просят часто.
+     */
+    fun toSrt(
+        pairs: List<Pair<Replica, String?>>,
+        speakerLabel: (String) -> String = { "Спикер ${it.substringAfterLast('_')}" },
+    ): String = buildString {
+        pairs.forEachIndexed { i, (rep, tr) ->
+            append(i + 1).append('\n')
+            append(srtTime(rep.startMs)).append(" --> ").append(srtTime(rep.endMs)).append('\n')
+            append(speakerLabel(rep.speakerId)).append(": ").append(rep.text).append('\n')
+            if (!tr.isNullOrBlank()) append(tr).append('\n')
+            append('\n')
+        }
+    }.trimEnd()
+
+    private fun srtTime(ms: Int): String {
+        val h = ms / 3_600_000
+        val m = (ms % 3_600_000) / 60_000
+        val s = (ms % 60_000) / 1000
+        val msec = ms % 1000
+        return "%02d:%02d:%02d,%03d".format(h, m, s, msec)
+    }
+
+    /** JSON для ТЗ остаётся без переводов, но с ними удобно отдавать заказчику. */
+    fun toJsonWithTranslations(pairs: List<Pair<Replica, String?>>): String {
+        val arr = JSONArray()
+        for ((r, tr) in pairs) {
+            val o = JSONObject()
+                .put("speaker_id", r.speakerId)
+                .put("start_ms", r.startMs)
+                .put("end_ms", r.endMs)
+                .put("text", r.text)
+            if (!tr.isNullOrBlank()) o.put("translation", tr)
+            arr.put(o)
+        }
+        return JSONObject().put("transcript", arr).toString(2)
+    }
 }

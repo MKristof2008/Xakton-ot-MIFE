@@ -100,6 +100,11 @@ class TranscriptPipeline(private val context: Context) {
         language: RecognitionLanguage = RecognitionLanguage.AUTO,
         /** Восстанавливать пунктуацию и регистр (настройка «Пунктуация и регистр»). */
         punctuation: Boolean = true,
+        /**
+         * Постобработка локальной LLM (настройка «Локальная модель»). По умолчанию
+         * выключена: ~7 секунд на реплику и ощутимый нагрев корпуса.
+         */
+        localLlm: Boolean = false,
         onProgress: (PipelineProgress) -> Unit = {},
         isCancelled: () -> Boolean = { false },
     ): TranscriptResult {
@@ -249,8 +254,15 @@ class TranscriptPipeline(private val context: Context) {
                 report(Stage.LLM, 1f, "Без пунктуации")
                 replicas
             }
-            russianText -> LlmPost(context).polish(replicas) { f ->
+            // Модель включается только по настройке: на телефоне она даёт +7 с
+            // на реплику и заметный нагрев, а выигрыш по сравнению с правилами
+            // небольшой.
+            localLlm -> LlmPost(context).polish(replicas) { f ->
                 report(Stage.LLM, f, "Обрабатываем текст локальной моделью")
+            }
+            russianText -> {
+                report(Stage.LLM, 1f, "Расставляем знаки препинания")
+                replicas.map { it.copy(text = ru.mifi.stenograf.llm.Grammar.polish(it.text)) }
             }
             else -> {
                 report(Stage.LLM, 1f, "Приводим текст в порядок")

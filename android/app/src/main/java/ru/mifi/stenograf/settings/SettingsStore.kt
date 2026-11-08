@@ -18,6 +18,7 @@ class SettingsStore(context: Context) {
         const val KEY_HAPTICS = "haptics"
         const val KEY_KEEP_AUDIO = "keep_audio"
         const val KEY_PUNCTUATION = "punctuation"
+        const val KEY_LOCAL_LLM = "local_llm"
         const val KEY_SHOW_TIMECODES = "show_timecodes"
         const val KEY_HISTORY_LIMIT = "history_limit"
         const val KEY_LANGUAGE = "recognition_language"
@@ -42,6 +43,14 @@ class SettingsStore(context: Context) {
     var punctuation: Boolean
         get() = prefs.getBoolean(KEY_PUNCTUATION, true)
         set(v) = prefs.edit().putBoolean(KEY_PUNCTUATION, v).apply()
+
+    /**
+     * Постобработка локальной LLM. По умолчанию выключена: модель добавляет
+     * ~7 секунд на реплику и заметно греет телефон. Правил хватает почти всегда.
+     */
+    var localLlm: Boolean
+        get() = prefs.getBoolean(KEY_LOCAL_LLM, false)
+        set(v) = prefs.edit().putBoolean(KEY_LOCAL_LLM, v).apply()
 
     /** Показывать таймкоды в результате по умолчанию. */
     var showTimecodes: Boolean

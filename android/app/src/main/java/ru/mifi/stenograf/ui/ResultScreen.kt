@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,6 +34,8 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -69,11 +72,15 @@ import ru.mifi.stenograf.pipeline.TranscriptResult
  * Результат расшифровки: сводка с метриками, лента реплик с цветом говорящего
  * и панель экспорта. Таймкоды можно скрыть — для чтения текста они мешают.
  */
+/** Сколько первых реплик появляются каскадом. Остальные — сразу. */
+private const val CASCADE_LIMIT = 8
+
 @Composable
 fun ResultScreen(
     state: AppState,
     onExportJson: () -> Unit,
     onExportText: () -> Unit,
+    onExportSrt: () -> Unit = {},
 ) {
     val result = state.result ?: return
     // Начальное значение — из настроек, а не всегда true: раньше тумблер
@@ -82,13 +89,19 @@ fun ResultScreen(
     val settings = remember { ru.mifi.stenograf.settings.SettingsStore(appContext) }
     var showTimecodes by remember { mutableStateOf(settings.showTimecodes) }
     var query by remember { mutableStateOf("") }
+    // Кого переименовываем: null — диалог закрыт.
+    var renaming by remember { mutableStateOf<String?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(result) { Haptics.success(context) }
 
-    // Поиск по тексту расшифровки: регистр не важен.
-    val shown = remember(query, result.replicas) {
+    // Поиск по оригиналу И по переводу: искать «deadline» в русском транскрипте
+// с английскими пометками иначе нечем.
+    val shown = remember(query, result.replicas, state.translations) {
         if (query.isBlank()) result.replicas
-        else result.replicas.filter { it.text.contains(query, ignoreCase = true) }
+        else result.replicas.filter {
+            it.text.contains(query, ignoreCase = true) ||
+                state.translations[it.startMs]?.contains(query, ignoreCase = true) == true
+        }
     }
 
     // Плеер: живой, если у результата есть файл аудио (запись или история).
@@ -114,8 +127,24 @@ fun ResultScreen(
     val activeIndex = if (audioPath == null) -1
     else shown.indexOfFirst { playback.positionMs in it.startMs..it.endMs }
 
+    // Автопрокрутка к звучащей реплике: при прослушивании длинной записи
+    // подсветка уезжала за экран и было непонятно, где сейчас звук.
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(activeIndex) {
+        // +5 — шапка со сводкой и плеером выше списка. Скроллим только когда
+        // реально играет звук: иначе список прыгает при каждом касании.
+        if (activeIndex >= 0 && playback.isPlaying) {
+            runCatching { listState.animateScrollToItem(activeIndex + 5) }
+        }
+    }
+
+    // Перевод доступен, только если локальная модель уже на устройстве.
+    // Проверка — это чтение каталога, поэтому запоминаем на один экран.
+    val canTranslate = remember(result) { ru.mifi.stenograf.llm.Translator.isAvailable(appContext) }
+
     Column(modifier = Modifier.fillMaxSize().brandGlow()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -131,6 +160,12 @@ fun ResultScreen(
             }
             item { MetricsRow(result) }
             item {
+                SpeakingShare(
+                    replicas = shown,
+                    label = { state.speakerLabel(it) },
+                )
+            }
+            item {
                 SearchField(query = query, onChange = { query = it })
             }
             item {
@@ -145,6 +180,21 @@ fun ResultScreen(
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f),
                     )
+                    if (canTranslate) {
+                        // Массовый перевод — рядом с заголовком: на длинной
+                        // записи жать по каждой реплике нерационально.
+                        if (state.translatingAll) {
+                            androidx.compose.material3.TextButton(onClick = { state.stopTranslateAll() }) {
+                                Text("стоп", style = MaterialTheme.typography.labelSmall)
+                            }
+                        } else if (state.translations.isEmpty()) {
+                            androidx.compose.material3.TextButton(
+                                onClick = { state.translateAll(result.replicas) },
+                            ) {
+                                Text("перевести всё", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
                     Text(
                         "таймкоды",
                         style = MaterialTheme.typography.labelSmall,
@@ -180,33 +230,72 @@ fun ResultScreen(
                 }
             }
             itemsIndexed(shown, key = { _, r -> "${r.startMs}-${r.speakerId}" }) { index, rep ->
-                // Каскад: каждая реплика появляется с задержкой по индексу.
-                // На демо это читается как «система думает и выдаёт результат».
-                var visible by remember { mutableStateOf(false) }
+                // Каскад только для первых реплик: на записи в 200 реплик
+                // задержка в полсекунды на каждую превращала прокрутку в слайд-шоу.
+                var visible by remember { mutableStateOf(index >= CASCADE_LIMIT) }
                 LaunchedEffect(rep.startMs) {
-                    kotlinx.coroutines.delay((index.coerceAtMost(12)) * 55L)
-                    visible = true
+                    if (index < CASCADE_LIMIT) {
+                        kotlinx.coroutines.delay(index * 45L)
+                        visible = true
+                    }
                 }
                 androidx.compose.animation.AnimatedVisibility(
                     visible = visible,
                     enter = androidx.compose.animation.fadeIn(tween(220)) +
-                        androidx.compose.animation.slideInHorizontally(tween(220)) { it / 6 },
+                        androidx.compose.animation.slideInVertically(tween(220)) { it / 8 },
                 ) {
                 ReplicaRow(
                     rep = rep,
+                    speakerLabel = state.speakerLabel(rep.speakerId),
                     showTimecodes = showTimecodes,
                     isActive = index == activeIndex,
+                    translation = state.translationFor(rep),
+                    isTranslating = state.translatingStartMs == rep.startMs,
+                    canTranslate = canTranslate,
                     onClick = if (audioPath != null) {
                         { playback.playFrom(rep.startMs) }
                     } else {
                         null
                     },
+                    onTranslate = { state.translate(rep) },
+                    onRenameSpeaker = { renaming = rep.speakerId },
                 )
                 }
             }
         }
 
-        ExportBar(onExportJson, onExportText, onNew = { state.backToImport() })
+        ExportBar(onExportJson, onExportText, onExportSrt, onNew = { state.backToImport() })
+    }
+
+    // Переименование говорящего: «Спикер 2» → «Иванов».
+    val renameTarget = renaming
+    if (renameTarget != null) {
+        var nameInput by remember(renameTarget) {
+            mutableStateOf(state.speakerNames[renameTarget].orEmpty())
+        }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = {
+                Text("Переименовать: ${state.speakerLabel(renameTarget)}")
+            },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = nameInput,
+                    onValueChange = { nameInput = it.take(24) },
+                    singleLine = true,
+                    placeholder = { Text("Имя или роль") },
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    state.renameSpeaker(renameTarget, nameInput)
+                    renaming = null
+                }) { Text("Сохранить") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { renaming = null }) { Text("Отмена") }
+            },
+        )
     }
 }
 
@@ -223,6 +312,61 @@ private fun SummaryHeader(result: TranscriptResult) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Сколько времени говорил каждый участник — по одной полоске на человека.
+ * На встречах это первый вопрос после расшифровки: «кто вообще говорил».
+ */
+@Composable
+private fun SpeakingShare(
+    replicas: List<Replica>,
+    label: (String) -> String,
+) {
+    if (replicas.isEmpty()) return
+    val total = replicas.sumOf { (it.endMs - it.startMs).coerceAtLeast(0) }.coerceAtLeast(1)
+    val shares = replicas
+        .groupBy { it.speakerId }
+        .map { (id, list) -> id to list.sumOf { (it.endMs - it.startMs).coerceAtLeast(0) } }
+        .sortedByDescending { it.second }
+    if (shares.size < 2) return
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp)),
+        ) {
+            for ((id, ms) in shares) {
+                Box(
+                    modifier = Modifier
+                        .weight((ms.toFloat() / total).coerceAtLeast(0.02f))
+                        .fillMaxHeight()
+                        .background(speakerColor(id)),
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            for ((id, ms) in shares.take(4)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(speakerColor(id)),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "${label(id)} ${(ms * 100 / total)}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -291,14 +435,19 @@ private fun MetricTile(
 @Composable
 private fun ReplicaRow(
     rep: Replica,
+    speakerLabel: String,
     showTimecodes: Boolean,
     isActive: Boolean = false,
+    translation: String? = null,
+    isTranslating: Boolean = false,
+    canTranslate: Boolean = false,
     onClick: (() -> Unit)? = null,
+    onTranslate: (() -> Unit)? = null,
+    onRenameSpeaker: (() -> Unit)? = null,
 ) {
     val color = speakerColor(rep.speakerId)
     val bg = if (isActive) color.copy(alpha = 0.16f)
     else MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-    val speakerNumber = rep.speakerId.substringAfterLast('_')
 
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Box(
@@ -320,10 +469,13 @@ private fun ReplicaRow(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Спикер $speakerNumber",
+                    speakerLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = color,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = if (onRenameSpeaker != null) {
+                        Modifier.clickableNoRipple(onRenameSpeaker)
+                    } else Modifier,
                 )
                 if (showTimecodes) {
                     Spacer(Modifier.width(8.dp))
@@ -333,14 +485,74 @@ private fun ReplicaRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Spacer(Modifier.weight(1f))
+                if (canTranslate && onTranslate != null) {
+                    TranslateChip(
+                        busy = isTranslating,
+                        done = translation != null,
+                        onClick = onTranslate,
+                    )
+                }
             }
             Text(rep.text, style = MaterialTheme.typography.bodyLarge)
+            // Перевод появляется под оригиналом и отделён тонкой линией:
+            // так видно, что это другой язык, а не продолжение реплики.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = translation != null,
+                enter = androidx.compose.animation.fadeIn(tween(180)) +
+                    androidx.compose.animation.expandVertically(tween(180)),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Text(
+                        translation.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = color.copy(alpha = 0.95f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Маленькая кнопка «перевести» в строке реплики: три состояния. */
+@Composable
+private fun TranslateChip(busy: Boolean, done: Boolean, onClick: () -> Unit) {
+    val tint = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(tint.copy(alpha = if (done) 0.16f else 0.10f))
+            .clickableNoRipple(onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (busy) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 1.5.dp,
+                color = tint,
+            )
+        } else {
+            Text(
+                if (done) "перевод ✓" else "перевести",
+                style = MaterialTheme.typography.labelSmall,
+                color = tint,
+            )
         }
     }
 }
 
 @Composable
-private fun ExportBar(onJson: () -> Unit, onText: () -> Unit, onNew: () -> Unit) {
+private fun ExportBar(
+    onJson: () -> Unit,
+    onText: () -> Unit,
+    onSrt: () -> Unit,
+    onNew: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -371,6 +583,15 @@ private fun ExportBar(onJson: () -> Unit, onText: () -> Unit, onNew: () -> Unit)
                 Icon(Icons.Filled.Description, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("TXT", style = MaterialTheme.typography.labelMedium)
+            }
+            OutlinedButton(
+                onClick = onSrt,
+                modifier = Modifier.weight(1f).height(46.dp),
+                shape = RoundedCornerShape(14.dp),
+            ) {
+                Icon(Icons.Filled.ClosedCaption, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("SRT", style = MaterialTheme.typography.labelMedium)
             }
             OutlinedButton(
                 onClick = onNew,
