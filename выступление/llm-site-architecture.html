@@ -1,0 +1,429 @@
+<title>Архитектура LLM и сайта</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* План: приборная панель — холодный нейтральный фон, два смысловых цвета:
+     янтарь = модель, бирюза = код с проверками. IBM Plex. */
+  :root {
+    --bg: #F5F7F7;
+    --surface: #FFFFFF;
+    --surface-2: #EBEEEE;
+    --ink: #141819;
+    --muted: #5A6467;
+    --line: #D7DDDE;
+    --line-strong: #BAC3C5;
+    --accent: #0C6560;
+    --accent-soft: #DFEFED;
+    --model: #9A5400;
+    --model-soft: #FBEFDF;
+    --danger: #9B2A1E;
+    --danger-soft: #FAE5E1;
+
+    --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0B0F11;
+      --surface: #131A1C;
+      --surface-2: #192123;
+      --ink: #E5EAEB;
+      --muted: #93A0A3;
+      --line: #222C2F;
+      --line-strong: #324044;
+      --accent: #5FD0C4;
+      --accent-soft: #102623;
+      --model: #EDB163;
+      --model-soft: #2A2014;
+      --danger: #FF8F80;
+      --danger-soft: #2B1714;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0B0F11;
+    --surface: #131A1C;
+    --surface-2: #192123;
+    --ink: #E5EAEB;
+    --muted: #93A0A3;
+    --line: #222C2F;
+    --line-strong: #324044;
+    --accent: #5FD0C4;
+    --accent-soft: #102623;
+    --model: #EDB163;
+    --model-soft: #2A2014;
+    --danger: #FF8F80;
+    --danger-soft: #2B1714;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.62;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+
+  header.top { padding-block: 40px 26px; border-bottom: 1px solid var(--line); }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 15px;
+  }
+  h1 {
+    font-size: clamp(27px, 5.6vw, 40px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+    margin: 0 0 14px;
+  }
+  .lede { font-size: 17px; color: var(--muted); max-width: 62ch; margin: 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .04em;
+    padding: 5px 10px;
+    border-radius: 3px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .lg i { width: 8px; height: 8px; border-radius: 2px; display: block; flex: none; }
+  .lg.model i { background: var(--model); }
+  .lg.code i { background: var(--accent); }
+  .lg.bad i { background: var(--danger); }
+
+  section { padding-block: 40px; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: 0; }
+  .sec-num {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .12em;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 12px;
+  }
+  h2 {
+    font-size: clamp(21px, 3.4vw, 26px);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.22;
+    margin: 0 0 8px;
+    text-wrap: balance;
+  }
+  .sec-sub { color: var(--muted); margin: 0 0 26px; max-width: 68ch; }
+  h3 { font-size: 16px; font-weight: 600; margin: 26px 0 8px; }
+  p { margin: 0 0 14px; max-width: 68ch; }
+  ul { margin: 0 0 16px; padding-left: 20px; max-width: 68ch; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--line-strong); }
+  code {
+    font-family: var(--f-mono);
+    font-size: .86em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    overflow-wrap: anywhere;
+  }
+
+  figure { margin: 0 0 20px; }
+  .svg-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--surface);
+    padding: 8px 6px;
+  }
+  .svg-wrap svg { display: block; width: 100%; min-width: 780px; height: auto; color: var(--ink); }
+  figcaption {
+    font-size: 13.5px;
+    color: var(--muted);
+    margin-top: 10px;
+    max-width: 74ch;
+  }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); margin: 0 0 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.m { font-family: var(--f-mono); font-size: 12.5px; white-space: nowrap; }
+
+  .callout {
+    border-left: 2px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 4px 4px 0;
+    padding: 13px 16px;
+    margin: 0 0 18px;
+    font-size: 15px;
+  }
+  .callout.warn { border-left-color: var(--model); background: var(--model-soft); }
+  .callout.bad { border-left-color: var(--danger); background: var(--danger-soft); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  footer { padding-block: 30px 0; color: var(--muted); font-size: 13.5px; max-width: 74ch; }
+
+  @media (max-width: 560px) {
+    body { font-size: 15.5px; }
+    th, td { padding: 8px 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">Нейро-стенографист · два чертежа по коду</p>
+    <h1>Архитектура LLM и сайта</h1>
+    <p class="lede">Первая схема — что происходит с одной репликой внутри локальной модели, включая проверку, которая откатывает её ответ. Вторая — из чего состоит сайт проекта и откуда он берёт данные.</p>
+    <div class="legend">
+      <span class="lg model"><i></i>вызов модели</span>
+      <span class="lg code"><i></i>код, который проверяет</span>
+      <span class="lg bad"><i></i>точка отката</span>
+    </div>
+  </header>
+
+  <!-- 1 -->
+  <section>
+    <span class="sec-num">01 / языковая модель</span>
+    <h2>Что происходит с одной репликой</h2>
+    <p class="sec-sub">Модель здесь не пересказывает и не исправляет текст — она расставляет запятые и заглавные буквы. Всё, что она возвращает, проходит проверку на потерю слов; не прошло — возвращается исходный текст ASR. Это и есть ответ на вопрос «можно ли доверять модели».</p>
+
+    <figure>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 430" role="img" aria-label="Схема обработки одной реплики локальной моделью: текст из ASR, промпт ChatML, генерация llama.cpp с жадным выбором до 512 токенов, очистка ответа, три проверки на длину и потерю слов, затем либо текст с пунктуацией, либо откат к исходному тексту ASR.">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <polygon points="0,0 10,5 0,10" fill="currentColor" />
+            </marker>
+            <pattern id="h1" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" stroke-width="1" opacity="0.25" />
+            </pattern>
+          </defs>
+
+          <!-- 1 вход -->
+          <text x="24" y="24" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.58">1 · ВХОД</text>
+          <rect x="24" y="32" width="212" height="64" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.8" />
+          <text x="38" y="52" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">реплика из ASR</text>
+          <text x="38" y="70" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">«над этой машиной он ткнул</text>
+          <text x="38" y="85" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">трубкой в сторону лесов»</text>
+
+          <line x1="236" y1="64" x2="268" y2="64" stroke="currentColor" stroke-width="1.2" marker-end="url(#a1)" />
+
+          <!-- 2 промпт -->
+          <text x="272" y="24" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.58">2 · ПРОМПТ</text>
+          <rect x="272" y="32" width="264" height="64" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.8" />
+          <text x="286" y="52" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">ChatML, одна задача</text>
+          <text x="286" y="70" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">«не меняй слова, не добавляй,</text>
+          <text x="286" y="85" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">верни одной строкой»</text>
+
+          <line x1="536" y1="64" x2="568" y2="64" stroke="currentColor" stroke-width="1.2" marker-end="url(#a1)" />
+
+          <!-- 3 генерация -->
+          <text x="572" y="24" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.58">3 · ГЕНЕРАЦИЯ — llama.cpp</text>
+          <rect x="572" y="32" width="284" height="64" rx="3" fill="none" stroke="#EDB163" stroke-width="1.5" />
+          <text x="586" y="52" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">Qwen2.5-0.5B Q4_K_M</text>
+          <text x="586" y="70" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.72">жадный выбор · до 512 токенов</text>
+          <text x="586" y="85" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.72">контекст 2048 · только CPU</text>
+
+          <!-- вниз к очистке -->
+          <line x1="714" y1="96" x2="714" y2="126" stroke="currentColor" stroke-width="1.1" marker-end="url(#a1)" opacity="0.85" />
+
+          <!-- 4 очистка -->
+          <rect x="440" y="130" width="416" height="58" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.8" />
+          <text x="454" y="150" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">очистка ответа</text>
+          <text x="454" y="168" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">срезать служебные токены &lt;|im_end|&gt; · взять первую непустую строку · снять кавычки</text>
+
+          <line x1="440" y1="159" x2="400" y2="159" stroke="currentColor" stroke-width="1.1" marker-end="url(#a1)" opacity="0.85" />
+
+          <!-- 5 проверки -->
+          <rect x="24" y="130" width="372" height="122" rx="3" fill="url(#h1)" stroke="#5FD0C4" stroke-width="1.5" />
+          <text x="38" y="150" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">проверка «текст не испорчен»</text>
+          <text x="38" y="172" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.8">длина изменилась больше чем на 30 % → нет</text>
+          <text x="38" y="191" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.8">потеряно больше 5 % исходных слов → нет</text>
+          <text x="38" y="210" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.8">появились слова, которых не было → нет</text>
+          <text x="38" y="234" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.62">сравнение по словам: регистр и пунктуация не в счёт</text>
+
+          <!-- 6 исходы -->
+          <line x1="210" y1="252" x2="210" y2="286" stroke="currentColor" stroke-width="1.1" marker-end="url(#a1)" />
+
+          <rect x="24" y="290" width="200" height="66" rx="3" fill="none" stroke="#5FD0C4" stroke-width="1.5" />
+          <text x="38" y="311" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">принято</text>
+          <text x="38" y="329" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">текст с пунктуацией</text>
+          <text x="38" y="344" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">уходит в расшифровку</text>
+
+          <line x1="392" y1="252" x2="392" y2="286" stroke="#FF8F80" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a1)" />
+          <rect x="292" y="290" width="200" height="66" rx="3" fill="none" stroke="#FF8F80" stroke-width="1.5" />
+          <text x="306" y="311" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">откат</text>
+          <text x="306" y="329" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">возвращается исходный</text>
+          <text x="306" y="344" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">текст ASR без изменений</text>
+
+          <!-- память -->
+          <rect x="516" y="286" width="340" height="70" rx="3" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.7" />
+          <text x="530" y="306" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">жизнь модели в памяти</text>
+          <text x="530" y="324" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">грузится один раз на все реплики · ~478 МБ</text>
+          <text x="530" y="341" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">выгружается после последней · сеть недоступна</text>
+
+          <!-- итог -->
+          <rect x="24" y="378" width="832" height="34" rx="3" fill="none" stroke="currentColor" stroke-width="1" opacity="0.65" />
+          <text x="38" y="400" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.8">сеть: llama.cpp собран без CURL и серверных частей — модель физически не может обратиться наружу</text>
+        </svg>
+      </div>
+      <figcaption><b>Главное на чертеже — две стрелки вниз из блока проверки.</b> Ответ модели не уходит в результат напрямую: у него есть ровно два пути, и путь «откат» ничем не хуже. На защите это отвечает на вопрос «а если модель перепишет смысл» — она не может, потому что её ответ выбрасывается целиком.</figcaption>
+    </figure>
+
+    <h3>Почему задача такая узкая</h3>
+    <p>Это результат замера, а не осторожность. A/B на ПК показал: если разрешить модели править слова, WER растёт с 0.1443 до 0.1546 — она «додумывает» («кнул трубкой» → «кинул трубку»). Режим только пунктуации даёт 0.1443, то есть точность не меняется, а читаемость растёт. Подробности — <code>docs/ML_MODELS.md</code>.</p>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Параметр</th><th>Значение в коде</th><th>Зачем именно так</th></tr></thead>
+        <tbody>
+          <tr><td>Модель</td><td class="m">qwen2.5-0.5b-instruct-q4_k_m</td><td>469 МБ; 1.5B не даёт выигрыша на этой задаче, но втрое тяжелее</td></tr>
+          <tr><td>Выбор токена</td><td class="m">greedy</td><td>повторяемость: одна и та же реплика даёт один и тот же текст</td></tr>
+          <tr><td>Лимит ответа</td><td class="m">512 токенов</td><td>реплика диалога укладывается с запасом; защита от зацикливания</td></tr>
+          <tr><td>Контекст</td><td class="m">2048</td><td>промпт и реплика помещаются, память не раздувается</td></tr>
+          <tr><td>Потоки</td><td class="m">2–6 по числу ядер</td><td>больше не ускоряет: упирается в память телефона</td></tr>
+          <tr><td>Допуск по длине</td><td class="m">30 %</td><td>пунктуация почти не меняет длину; выход за 30 % — признак переписывания</td></tr>
+          <tr><td>Допуск по словам</td><td class="m">5 %</td><td>потеря или добавление слов сверх этого — порча, ответ отбрасывается</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <p><strong>Слабое место, о котором спросят.</strong> Порог 5 % на коротких репликах почти не работает: в строке из пяти слов это меньше одного слова, то есть проверка фактически запрещает любую замену. Это скорее плюс для защиты, но честнее сказать так: на коротких репликах проверка жёстче, чем задумано, и в замере потерь не было потому, что модель просто не смогла ничего испортить.</p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <span class="sec-num">02 / сайт</span>
+    <h2>Из чего состоит сайт проекта</h2>
+    <p class="sec-sub">Сайт — один статический файл <code>site/index.html</code>: без сборки, без внешних библиотек, без сервера. Всё, что на нём написано, взято из документов репозитория — поэтому сайт не может разойтись с отчётом.</p>
+
+    <figure>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 880 400" role="img" aria-label="Схема сайта: семь секций одной страницы, источники данных из README и папки docs, графики из docs/img, размещение статическим файлом и связь с артефактами репозитория.">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <polygon points="0,0 10,5 0,10" fill="currentColor" />
+            </marker>
+            <pattern id="h2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" stroke-width="1" opacity="0.25" />
+            </pattern>
+          </defs>
+
+          <!-- источники -->
+          <text x="24" y="24" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.58">ОТКУДА ДАННЫЕ</text>
+
+          <rect x="24" y="32" width="196" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.75" />
+          <text x="38" y="52" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">README.md</text>
+          <text x="38" y="68" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.65">цифры в шапке</text>
+
+          <rect x="24" y="88" width="196" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.75" />
+          <text x="38" y="108" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">docs/*.md</text>
+          <text x="38" y="124" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.65">архитектура, ограничения</text>
+
+          <rect x="24" y="144" width="196" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.75" />
+          <text x="38" y="164" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">measurements.csv</text>
+          <text x="38" y="180" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.65">все замеры</text>
+
+          <rect x="24" y="200" width="196" height="46" rx="3" fill="#FBEFDF" stroke="#EDB163" stroke-width="1.3" opacity="0.95" />
+          <text x="38" y="220" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">docs/img/*.png</text>
+          <text x="38" y="236" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.65">графики из CSV</text>
+
+          <!-- страница -->
+          <line x1="220" y1="150" x2="268" y2="150" stroke="currentColor" stroke-width="1.1" marker-end="url(#a2)" opacity="0.8" />
+
+          <text x="272" y="24" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.58">ОДНА СТРАНИЦА — site/index.html</text>
+          <rect x="272" y="32" width="330" height="300" rx="3" fill="none" stroke="#5FD0C4" stroke-width="1.5" />
+          <text x="288" y="54" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">Видео → текст</text>
+          <text x="288" y="78" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">Что это</text>
+          <text x="288" y="102" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">Формат результата</text>
+          <text x="288" y="126" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">Состояние разработки</text>
+          <text x="288" y="150" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">Критерии оценки</text>
+          <text x="288" y="174" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">Архитектура</text>
+          <text x="288" y="198" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">Ограничения</text>
+          <line x1="288" y1="214" x2="586" y2="214" stroke="currentColor" stroke-width="1" opacity="0.25" />
+          <text x="288" y="236" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.68">один файл · 12 КБ · без script</text>
+          <text x="288" y="253" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.68">без внешних шрифтов и CDN</text>
+          <text x="288" y="270" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.68">работает из файла, без сервера</text>
+          <text x="288" y="287" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.68">тёмная тема, адаптив до 360 px</text>
+          <text x="288" y="312" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.55">раздел «Архитектура»: четыре контракта</text>
+
+          <!-- публикация -->
+          <line x1="602" y1="150" x2="650" y2="150" stroke="currentColor" stroke-width="1.1" marker-end="url(#a2)" opacity="0.8" />
+
+          <text x="654" y="24" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.58">ГДЕ ОТКРЫВАЕТСЯ</text>
+          <rect x="654" y="32" width="202" height="70" rx="3" fill="url(#h2)" stroke="currentColor" stroke-width="1.1" opacity="0.9" />
+          <text x="668" y="52" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">GitHub Pages</text>
+          <text x="668" y="70" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.7">или локально двойным</text>
+          <text x="668" y="85" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.7">щелчком по файлу</text>
+
+          <rect x="654" y="114" width="202" height="70" rx="3" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.7" />
+          <text x="668" y="134" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">artifacts/</text>
+          <text x="668" y="152" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.7">APK и результаты</text>
+          <text x="668" y="167" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.7">тестов — рядом</text>
+
+          <rect x="654" y="196" width="202" height="70" rx="3" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.7" />
+          <text x="668" y="216" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">docs/</text>
+          <text x="668" y="234" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.7">полные документы,</text>
+          <text x="668" y="249" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="currentColor" opacity="0.7">на которые ссылается сайт</text>
+
+          <!-- поток к приложению -->
+          <line x1="437" y1="332" x2="437" y2="356" stroke="currentColor" stroke-width="1.1" marker-end="url(#a2)" opacity="0.8" />
+          <rect x="272" y="360" width="584" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="1" opacity="0.6" />
+          <text x="288" y="381" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.78">сайт ничего не вычисляет: это витрина. Всё, что он утверждает, проверяется кодом в android/ и тестами</text>
+        </svg>
+      </div>
+      <figcaption><b>Почему сайт — один файл, а не приложение.</b> Экспертам нужно посмотреть проект за тридцать секунд, и статическая страница решает эту задачу без сервера, зависимостей и риска «у меня не запустилось». Всё остальное — в документах, на которые сайт ссылается.</figcaption>
+    </figure>
+
+    <h3>Что обновлять при изменении цифр</h3>
+    <p>Единственный источник замеров — <code>docs/benchmarks/measurements.csv</code>. Из него строятся графики, из них и из CSV — таблицы в документах, и только потом цифры попадают на сайт и в слайды. Порядок важен: если править сайт первым, он разойдётся с отчётом, и это заметят.</p>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Что меняем</th><th>Порядок обновления</th></tr></thead>
+        <tbody>
+          <tr><td>Новый замер</td><td>строка в <code>measurements.csv</code> → <code>make_bench_charts.py</code> → таблицы в <code>TEST_RESULTS.md</code> и <code>ML_MODELS.md</code> → шапка <code>README.md</code> → сайт</td></tr>
+          <tr><td>Сменилась модель</td><td><code>ML_MODELS.md</code> → <code>ARCHITECTURE.md</code> и схема → <code>LocalLlmEngine</code> в коде → сайт</td></tr>
+          <tr><td>Новая возможность</td><td><code>ROADMAP.md</code> → <code>LIMITATIONS.md</code> (что перестало быть ограничением) → сайт, секция «Состояние»</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p><strong>Чего на сайте намеренно нет.</strong> Прямой ссылки на скачивание APK: файл передаётся организаторам и лежит в <code>artifacts/</code>. И нет раздела «протокол совещания» — языковая модель в приложении пунктуацию делает, а протокол собирает только прототип на Python. Обещать на витрине то, чего нет в сборке, — самый быстрый способ потерять баллы за защиту.</p>
+    </div>
+  </section>
+
+  <footer>
+    Оба чертежа построены по коду: <code>engine/LocalLlmEngine.kt</code>, <code>cpp/llm_jni.cpp</code> и <code>site/index.html</code>. Параметры генерации, пороги проверки и объём модели взяты из констант в этих файлах. Цифры WER — из <code>docs/benchmarks/measurements.csv</code>.
+  </footer>
+</div>

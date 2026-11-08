@@ -1,0 +1,511 @@
+<title>Результаты собственных тестов</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  /* План: отчётная страница — тихая бумага, крупные цифры как единственный акцент,
+     графики на белом (они отрендерены matplotlib и тёмную тему не знают). */
+  :root {
+    --bg: #F4F6F8;
+    --surface: #FFFFFF;
+    --surface-2: #E9EDF1;
+    --ink: #14181C;
+    --muted: #59636E;
+    --line: #D8DFE6;
+    --line-strong: #B9C3CD;
+    --accent: #1F5C8B;
+    --accent-soft: #E2EDF6;
+    --good: #1C6B3A;
+    --good-soft: #E3F1E8;
+    --bad: #A32B1E;
+    --bad-soft: #FAE6E2;
+    --warn: #855200;
+    --warn-soft: #FBF0DA;
+    --code-bg: #11181D;
+    --code-ink: #E2E9EE;
+
+    --f-body: "Golos Text", "Segoe UI", system-ui, sans-serif;
+    --f-head: "Manrope", "Golos Text", system-ui, sans-serif;
+    --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0C1014;
+      --surface: #131A20;
+      --surface-2: #1A222A;
+      --ink: #E6EBF0;
+      --muted: #96A2AE;
+      --line: #232C35;
+      --line-strong: #33404B;
+      --accent: #7FB6E0;
+      --accent-soft: #13232F;
+      --good: #6BCB8F;
+      --good-soft: #12251A;
+      --bad: #FF9486;
+      --bad-soft: #2A1714;
+      --warn: #E4AE52;
+      --warn-soft: #241C0E;
+      --code-bg: #080C10;
+      --code-ink: #DCE5EC;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0C1014;
+    --surface: #131A20;
+    --surface-2: #1A222A;
+    --ink: #E6EBF0;
+    --muted: #96A2AE;
+    --line: #232C35;
+    --line-strong: #33404B;
+    --accent: #7FB6E0;
+    --accent-soft: #13232F;
+    --good: #6BCB8F;
+    --good-soft: #12251A;
+    --bad: #FF9486;
+    --bad-soft: #2A1714;
+    --warn: #E4AE52;
+    --warn-soft: #241C0E;
+    --code-bg: #080C10;
+    --code-ink: #DCE5EC;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.62;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 64px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  header.top { padding-block: 40px 24px; }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--f-head);
+    font-size: clamp(28px, 5.8vw, 41px);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -0.024em;
+    text-wrap: balance;
+    margin: 0 0 14px;
+  }
+  .lede { font-size: 17px; color: var(--muted); max-width: 60ch; margin: 0; }
+
+  /* Полоса главных чисел */
+  .headline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    overflow: hidden;
+    margin: 28px 0 8px;
+  }
+  .hl { background: var(--surface); padding: 16px 18px; }
+  .hl b {
+    display: block;
+    font-family: var(--f-head);
+    font-size: clamp(26px, 4.6vw, 34px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .hl b.ok { color: var(--good); }
+  .hl span {
+    display: block;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.35;
+  }
+
+  section { padding-block: 38px; border-top: 1px solid var(--line); }
+  section.first { border-top: 0; }
+  h2 {
+    font-family: var(--f-head);
+    font-size: clamp(20px, 3.4vw, 25px);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.24;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  .sub { color: var(--muted); margin: 0 0 22px; max-width: 68ch; font-size: 15px; }
+  h3 { font-family: var(--f-head); font-size: 16px; font-weight: 700; margin: 26px 0 8px; }
+  p { margin: 0 0 14px; max-width: 68ch; }
+  ul { margin: 0 0 16px; padding-left: 20px; max-width: 68ch; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--line-strong); }
+  strong { font-weight: 600; }
+  code {
+    font-family: var(--f-mono);
+    font-size: .87em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    overflow-wrap: anywhere;
+  }
+
+  /* Графики */
+  figure { margin: 0 0 18px; }
+  .shot {
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #FFFFFF;
+    padding: 4px;
+    overflow: hidden;
+  }
+  .shot img { display: block; width: 100%; height: auto; }
+  figcaption {
+    font-size: 13.5px;
+    color: var(--muted);
+    margin-top: 9px;
+    max-width: 70ch;
+  }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  /* Таблицы */
+  .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); margin: 0 0 18px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13px; }
+  tr.pick td { background: var(--good-soft); }
+  tr.pick td:first-child { font-weight: 600; }
+  tr.reject td { color: var(--muted); }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 4px 4px 0;
+    padding: 13px 16px;
+    margin: 0 0 18px;
+    font-size: 15px;
+  }
+  .callout.warn { border-left-color: var(--bad); background: var(--bad-soft); }
+  .callout.note { border-left-color: var(--warn); background: var(--warn-soft); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .verdict {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin: 0 0 18px;
+  }
+  .vcard {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 14px 15px;
+  }
+  .vcard h4 {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 7px;
+    font-weight: 500;
+  }
+  .vcard p { font-size: 14px; margin: 0; }
+  .vcard p + p { margin-top: 8px; }
+  .vcard.yes { border-left: 3px solid var(--good); }
+  .vcard.no { border-left: 3px solid var(--bad); }
+
+  .code {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 5px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: var(--f-mono);
+    font-size: 13px;
+    line-height: 1.72;
+    margin: 0 0 18px;
+    white-space: pre;
+  }
+
+  footer { padding-block: 30px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; max-width: 72ch; }
+
+  @media (max-width: 560px) {
+    body { font-size: 15.5px; }
+    .hl { padding: 13px 14px; }
+    th, td { padding: 8px 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">Пункт 6 отчётного материала · Нейро-стенографист</p>
+    <h1>Результаты собственных тестов</h1>
+    <p class="lede">Восемь замеров на Samsung SM-S938B, 48 автоматических проверок и три графика. Каждое число здесь можно воспроизвести командой из репозитория — и это главное, что стоит говорить жюри.</p>
+
+    <div class="headline">
+      <div class="hl"><b class="ok">0.178</b><span>WER распознавания</span></div>
+      <div class="hl"><b class="ok">0.082</b><span>DER диаризации</span></div>
+      <div class="hl"><b class="ok">0.31</b><span>RTF распознавания</span></div>
+      <div class="hl"><b>48</b><span>проверок: 33 юнит + 15 на устройстве</span></div>
+    </div>
+  </header>
+
+  <!-- 1 -->
+  <section class="first">
+    <h2>Распознавание речи</h2>
+    <p class="sub">20 записей русской речи VoxForge, 273 слова, нормализация WER: регистр, пунктуация, ё/е. Модели сравнивались на одном наборе, на одном устройстве, в release-сборке.</p>
+
+    <figure>
+      <div class="shot"><img src="repo/docs/img/bench_wer.png" alt="Столбчатая диаграмма WER: tiny 0.37, base 0.25, small q5_1 0.18, small f16 0.17" width="1030" height="686"></div>
+      <figcaption><b>Выбрана не самая точная модель.</b> small f16 точнее на 0.8 процентного пункта, но весит 465 МБ против 181 МБ. Транскрибация в оценке ТЗ стоит 40 баллов, скорость — 10, поэтому 465 МБ за 0.8 п.п. — плохой обмен: +284 МБ к APK, который и так 704 МБ.</figcaption>
+    </figure>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Модель</th><th>WER</th><th>RTF</th><th>Размер</th><th>Решение</th></tr></thead>
+        <tbody>
+          <tr class="reject"><td>tiny</td><td class="n">0.368</td><td class="n">0.10</td><td class="n">74 МБ</td><td>отклонена: ошибка в каждом третьем слове</td></tr>
+          <tr class="reject"><td>base</td><td class="n">0.245</td><td class="n">0.22</td><td class="n">141 МБ</td><td>отклонена: 24.5 % ошибок — много для протокола</td></tr>
+          <tr class="reject"><td>small f16</td><td class="n">0.170</td><td class="n">0.35</td><td class="n">465 МБ</td><td>отклонена: точнее, но в 2.6 раза тяжелее</td></tr>
+          <tr class="pick"><td>small q5_1</td><td class="n">0.178</td><td class="n">0.31</td><td class="n">181 МБ</td><td>в сборке</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>RTF на коротких файлах завышен: whisper добивает каждую запись до 30 секунд, и на 10-секундном файле это даёт RTF 0.8 вместо реального. Поэтому отдельно замерен диалог 80 секунд — 0.31, то есть запись обрабатывается втрое быстрее, чем звучит.</p>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <h2>Разделение говорящих</h2>
+    <p class="sub">Диалог двух человек, 79.8 секунды, допуск 250 мс у границ, оптимальное выравнивание меток говорящих. Один эталон — и это ограничение, о котором нужно говорить вслух.</p>
+
+    <figure>
+      <div class="shot"><img src="repo/docs/img/bench_der.png" alt="Столбчатая диаграмма DER по шагам обработки: 0.665, 0.414, 0.372, 0.082" width="1180" height="650"></div>
+      <figcaption><b>92 % улучшения дала постобработка, а не модель.</b> Сырой вывод sherpa-onnx давал DER 0.665. Модель при этом не менялась ни разу: сначала исправили саму метрику (она сравнивала метки без выравнивания), потом склеили паузы внутри реплики, потом поделили паузы между говорящими. Это самый сильный инженерный аргумент в отчёте.</figcaption>
+    </figure>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Шаг</th><th>DER</th><th>Что было не так</th></tr></thead>
+        <tbody>
+          <tr><td>Сырой вывод sherpa-onnx</td><td class="n">0.665</td><td>метки говорящих сравнивались без выравнивания</td></tr>
+          <tr><td>+ выравнивание меток в метрике</td><td class="n">0.414</td><td>пропуск 34.8 %: паузы внутри реплики ничьи</td></tr>
+          <tr><td>+ склейка пауз одного говорящего</td><td class="n">0.372</td><td>речь распадалась на короткие интервалы</td></tr>
+          <tr class="pick"><td>+ деление пауз между говорящими</td><td class="n">0.082</td><td>пропуск 4.1 %, ложная речь 3.7 %, путаница 0.5 %</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <h2>Скорость и память</h2>
+    <p class="sub">RTF меньше единицы означает, что обработка идёт быстрее реального времени. Пик памяти измерен на сквозном прогоне — он и определяет, какие модели вообще влезают в телефон.</p>
+
+    <figure>
+      <div class="shot"><img src="repo/docs/img/bench_rtf.png" alt="Столбчатая диаграмма RTF: small q5_1 — 0.31, small f16 — 0.35, линия RTF=1" width="1060" height="670"></div>
+      <figcaption><b>Что это значит на практике.</b> RTF 0.31 — 80-секундная запись обработана примерно за 25 секунд. Тридцатиминутная запись займёт около 9 минут: это нужно называть вслух, а не ждать вопроса. Время растёт линейно, память — нет.</figcaption>
+    </figure>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Прогон</th><th>Длительность</th><th>Обработка</th><th>RTF</th><th>Пик ОЗУ</th><th>Результат</th></tr></thead>
+        <tbody>
+          <tr><td>Диалог, распознавание</td><td class="n">79.8 с</td><td class="n">24.9 с</td><td class="n">0.312</td><td class="n">181 МБ</td><td>—</td></tr>
+          <tr><td>Диалог, диаризация</td><td class="n">79.8 с</td><td class="n">13.6 с</td><td class="n">0.170</td><td class="n">44 МБ</td><td>2 говорящих из 2</td></tr>
+          <tr><td>Сквозной, голос пользователя</td><td class="n">54 с</td><td class="n">39.7 с</td><td class="n">0.735</td><td class="n">873 МБ</td><td>10 реплик, без падения</td></tr>
+          <tr class="pick"><td>Сквозной, длинная запись</td><td class="n">159 с</td><td class="n">93.2 с</td><td class="n">0.586</td><td class="n">872 МБ</td><td>без выгрузки по памяти</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout note">
+      <p><strong>Почему пик памяти — важное число.</strong> 872 МБ — это все четыре модели плюс аудио. Любая модель, которая не влезает в этот бюджет, заставит выгружать предыдущую и обрабатывать запись по частям. Именно это ограничение, а не качество, отсекло более крупные языковые модели.</p>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section>
+    <h2>Языковая модель: почему Qwen2.5 и почему 0.5B</h2>
+    <p class="sub">Это тот вопрос, который задают первым. Честный ответ состоит из двух частей: что измерено и что было решением, а не замером.</p>
+
+    <h3>Сначала — что модель делает в пайплайне</h3>
+    <p>Роль модели узкая, и это результат замера, а не осторожности. Полная правка текста моделью <strong>ухудшает</strong> WER на 1 процентный пункт: модель «додумывает» слова — «кнул трубкой» превращается в «кинул трубку». Пунктуация и регистр WER не меняют вообще, потому что не трогают слов.</p>
+
+    <figure>
+      <div class="shot"><img src="repo/docs/img/bench_llm_role.png" alt="A/B-замер WER: без LLM 0.1443, полная правка 0.1546, только пунктуация 0.1443" width="1050" height="670"></div>
+      <figcaption><b>A/B-замер роли модели.</b> Правка слов — красный столбец — отклонена по цифре: 0.1443 → 0.1546. Режим пунктуации даёт 0.1443, то есть ровно ту же точность, но с знаками препинания. Замер сделан на ПК с Qwen2.5-1.5B, и это нужно подписывать честно: на телефоне стоит 0.5B.</figcaption>
+    </figure>
+
+    <h3>Теперь — почему именно Qwen2.5</h3>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Кандидат</th><th>Размер Q4</th><th>Лицензия</th><th>Почему не выбрана</th></tr></thead>
+        <tbody>
+          <tr class="pick"><td>Qwen2.5-0.5B-Instruct</td><td class="n">469 МБ</td><td>Apache-2.0</td><td>в сборке: влезает в бюджет памяти, GGUF есть</td></tr>
+          <tr class="reject"><td>Qwen2.5-1.5B-Instruct</td><td class="n">~1.0 ГБ</td><td>Apache-2.0</td><td>выше пика ОЗУ 872 МБ вместе с остальными моделями</td></tr>
+          <tr class="reject"><td>Gemma-2-2B-it</td><td class="n">~1.6 ГБ</td><td>Gemma Terms</td><td>тяжелее бюджета; своя лицензия с ограничениями</td></tr>
+          <tr class="reject"><td>Phi-3-mini-4k</td><td class="n">~2.3 ГБ</td><td>MIT</td><td>слишком тяжёлая для телефона</td></tr>
+          <tr class="reject"><td>Saiga / GigaChat-lite</td><td class="n">~1–2 ГБ</td><td>разная</td><td>лицензию пришлось бы проверять отдельно</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="verbatim-cards verdict">
+      <div class="vcard yes">
+        <h4>Что измерено</h4>
+        <p>Модель работает на устройстве, не портит текст (WER до/после 0.0000 на четырёх контрольных репликах), укладывается в ~1.2 секунды на реплику и влезает в память вместе с остальными тремя моделями.</p>
+      </div>
+      <div class="vcard no">
+        <h4>Чего НЕ измерено</h4>
+        <p>Прямого сравнения языковых моделей между собой не было. Замер один — на Qwen2.5. Gemma, Phi и Saiga отсеяны по размеру и лицензии <strong>до</strong> запуска, а не по качеству.</p>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <p><strong>Как отвечать на вопрос «почему не Gemma?».</strong> Не «потому что Qwen умнее» — это неправда, мы этого не мерили. Правильный ответ: «Задача узкая — расставить запятые, не переписывая слова. Для неё важнее вес и лицензия, чем параметры модели. Qwen2.5-0.5B — 469 МБ, Apache-2.0, есть готовый GGUF. Gemma-2B весит 1.6 ГБ и не влезает в наш измеренный бюджет памяти 872 МБ. Если нужно сравнение по качеству — вот протокол, прогоним за час».</p>
+    </div>
+
+    <figure>
+      <div class="shot"><img src="repo/docs/img/bench_llm_size.png" alt="Столбчатая диаграмма размера кандидатов LLM: 469, 1000, 1600, 2300 МБ и линия пика ОЗУ 873 МБ" width="1180" height="720"></div>
+      <figcaption><b>Критерий выбора — бюджет памяти, а не «умность».</b> Только Qwen2.5-0.5B помещается ниже измеренного пика 873 МБ с запасом. Всё, что правее пунктира, заставило бы выгружать ASR и диаризацию ради языковой модели, которая расставляет запятые.</figcaption>
+    </figure>
+
+    <h3>Как закрыть разрыв за час</h3>
+    <p>Тест уже написан — <code>LlmBenchTest</code> прогоняет модель на четырёх контрольных репликах и печатает WER до/после, время и объём. Достаточно поменять файл модели и прогнать три раза:</p>
+    <div class="code"># тест уже умеет это делать — меняется только файл модели
+./gradlew :app:connectedAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=ru.hexteam.stenograph.bench.LlmBenchTest
+
+# что смотреть в logcat
+#   LLM: ms=... wer_before_after=...
+#   LLM: RESULT samples=4 total_ms=... avg_ms=...</div>
+    <p>Сравнивать надо по трём числам: WER до/после, среднее время на реплику, пик памяти. Тогда «почему 0.5B» перестаёт быть рассуждением.</p>
+  </section>
+
+  <!-- 5 -->
+  <section>
+    <h2>Узнавание голоса между записями</h2>
+    <p class="sub">Отпечатки 3D-Speaker ERes2Net, порог 0.75. Проверяет, что «Спикер 1» в одной записи и «Спикер 1» в другой — это действительно один человек.</p>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Сравнение</th><th>Сходство</th><th>Порог 0.75</th><th>Итог</th></tr></thead>
+        <tbody>
+          <tr class="pick"><td>Один человек: первая половина записи против второй</td><td class="n">0.894 · 0.920</td><td class="n">выше</td><td>узнан</td></tr>
+          <tr><td>Разные люди: диалог против записи пользователя</td><td class="n">0.015 · 0.162</td><td class="n">ниже</td><td>ложных узнаваний 0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Разрыв между «своим» и «чужим» больше 0.7 — запас по порогу огромный. Проверено на двух парах, поэтому говорим «0 ложных узнаваний на двух парах», а не «не ошибается никогда».</p>
+  </section>
+
+  <!-- 6 -->
+  <section>
+    <h2>Автоматические проверки</h2>
+    <p class="sub">33 юнит-теста работают на любом компьютере без телефона, 15 замеров требуют устройство. Всё запускается одной командой.</p>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Набор</th><th>Проверок</th><th>Где</th><th>Что проверяет</th></tr></thead>
+        <tbody>
+          <tr><td><code>MergeTest</code></td><td class="n">7</td><td>юнит</td><td>сшивка реплик по наибольшему пересечению, таймкоды</td></tr>
+          <tr><td><code>MetricsTest</code></td><td class="n">13</td><td>юнит</td><td>WER, DER, RTF — включая краевые случаи</td></tr>
+          <tr><td><code>TranscriptJsonTest</code></td><td class="n">4</td><td>юнит</td><td>ровно четыре поля, порядок, кириллица</td></tr>
+          <tr><td><code>ExportTest</code></td><td class="n">9</td><td>юнит</td><td>формат JSON по схеме ТЗ</td></tr>
+          <tr class="pick"><td><code>PipelineE2ETest</code></td><td class="n">4</td><td>устройство</td><td>весь путь от аудио до JSON</td></tr>
+          <tr><td><code>WerTest</code></td><td class="n">1</td><td>устройство</td><td>замер WER на 20 записях</td></tr>
+          <tr><td><code>DeviceBenchTest</code></td><td class="n">2</td><td>устройство</td><td>RTF и память</td></tr>
+          <tr><td><code>LlmBenchTest</code></td><td class="n">1</td><td>устройство</td><td>пунктуация не портит текст</td></tr>
+          <tr><td><code>SpeakerMatchTest</code></td><td class="n">2</td><td>устройство</td><td>узнавание голоса</td></tr>
+          <tr><td><code>ThresholdSweepTest</code></td><td class="n">2</td><td>устройство</td><td>подбор порога кластеризации</td></tr>
+          <tr><td><code>VoiceEnrollmentTest</code>, <code>VoiceRankTest</code></td><td class="n">2</td><td>устройство</td><td>эталон голоса, ранжирование</td></tr>
+          <tr><td><code>VideoInputTest</code></td><td class="n">1</td><td>устройство</td><td>извлечение звука из mp4/mkv</td></tr>
+          <tr class="pick"><td><strong>Итого</strong></td><td class="n"><strong>48</strong></td><td>33 + 15</td><td>все проходят</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="code"># без телефона — 33 проверки, около минуты
+cd android && ./gradlew :app:test
+
+# на подключённом телефоне — ещё 15 замеров
+./gradlew :app:connectedAndroidTest</div>
+  </section>
+
+  <!-- 7 -->
+  <section>
+    <h2>Проверка офлайн-требования</h2>
+    <p class="sub">Это не замер качества, а проверка запрета из ТЗ — и её может повторить любой эксперт.</p>
+
+    <div class="code">$ aapt2 dump permissions app-release.apk
+
+uses-permission: RECORD_AUDIO
+uses-permission: FOREGROUND_SERVICE
+uses-permission: FOREGROUND_SERVICE_DATA_SYNC
+uses-permission: POST_NOTIFICATIONS
+
+# android.permission.INTERNET отсутствует</div>
+
+    <ul>
+      <li>В собранных <code>.so</code> нет символов <code>connect</code>, <code>socket</code>, <code>getaddrinfo</code>, <code>curl</code> — проверено линкером.</li>
+      <li>В APK нет okhttp, retrofit, ktor, volley, firebase — проверено распаковкой dex.</li>
+      <li>Классов <code>Stubs*</code> в release-dex нет: заглушки не компилируются в сборку.</li>
+      <li>Приложение запущено в авиарежиме и прошло весь путь: импорт, распознавание, диаризация, экспорт.</li>
+    </ul>
+  </section>
+
+  <!-- 8 -->
+  <section>
+    <h2>Что честно не проверено</h2>
+    <p class="sub">Этот раздел нужен сильнее всех остальных: он показывает, что границы решения известны. Скрывать их бессмысленно — спросят именно про них.</p>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Что</th><th>Почему не проверено</th><th>Риск на защите</th></tr></thead>
+        <tbody>
+          <tr><td>Шумные записи</td><td>шумоподавление есть, корректного замера «до/после» нет</td><td>WER будет выше, чем 0.178</td></tr>
+          <tr><td>Перебивания</td><td>распознаётся доминирующий голос; одновременная речь не разделяется</td><td>прямое ограничение метода, не баг</td></tr>
+          <tr><td>3–4 говорящих</td><td>порог кластеризации 0.9 подобран на диалоге двух</td><td>вероятна недооценка числа людей</td></tr>
+          <tr><td>Сравнение LLM по качеству</td><td>замер один, на Qwen2.5; остальные отсеяны по размеру</td><td>вопрос «почему не Gemma»</td></tr>
+          <tr><td>Другие устройства</td><td>все замеры на SM-S938B, arm64</td><td>на слабом телефоне RTF может превысить 1</td></tr>
+          <tr><td>Три записи экспертов</td><td>появятся на проверке; сейчас 20 записей VoxForge + 2 диалога</td><td>цифры могут измениться в любую сторону</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p><strong>Одна фраза для защиты.</strong> «Все числа получены на одном устройстве в release-сборке, и каждое воспроизводится командой из репозитория. Где замера нет — мы это пишем, а не подставляем цифру из другого окружения».</p>
+    </div>
+  </section>
+
+  <footer>
+    Источник всех чисел — <code>docs/benchmarks/measurements.csv</code>; графики строятся из него скриптом <code>tools/make_bench_charts.py</code>, поэтому таблица и картинки не могут разойтись. Устройство: Samsung SM-S938B, release-сборка, 7 ноября 2026. Шаги улучшения DER и размеры кандидатов LLM взяты из <code>docs/ML_MODELS.md</code>.
+  </footer>
+</div>
