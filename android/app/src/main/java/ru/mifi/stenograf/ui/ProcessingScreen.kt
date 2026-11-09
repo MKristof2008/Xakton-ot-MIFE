@@ -151,16 +151,21 @@ private fun ProgressRing(progress: Float) {
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "${(progress * 100).toInt()}",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                "процентов",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // «43 %» компактнее, чем «43 процентов», и не выдаёт
+            // неверное склонение на 1, 2 и 44.
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    "${(progress * 100).toInt()}",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "%",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+                )
+            }
         }
     }
 }

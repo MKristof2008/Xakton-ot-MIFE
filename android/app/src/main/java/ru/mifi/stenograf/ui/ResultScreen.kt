@@ -178,27 +178,15 @@ fun ResultScreen(
                     Text(
                         if (query.isBlank()) "Расшифровка" else "Найдено: ${shown.size}",
                         style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    if (canTranslate) {
-                        // Массовый перевод — рядом с заголовком: на длинной
-                        // записи жать по каждой реплике нерационально.
-                        if (state.translatingAll) {
-                            androidx.compose.material3.TextButton(onClick = { state.stopTranslateAll() }) {
-                                Text("стоп", style = MaterialTheme.typography.labelSmall)
-                            }
-                        } else if (state.translations.isEmpty()) {
-                            androidx.compose.material3.TextButton(
-                                onClick = { state.translateAll(result.replicas) },
-                            ) {
-                                Text("перевести всё", style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
                     Text(
                         "таймкоды",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
                     )
                     Spacer(Modifier.width(8.dp))
                     Switch(
@@ -209,6 +197,47 @@ fun ResultScreen(
                             checkedTrackColor = MaterialTheme.colorScheme.primary,
                         ),
                     )
+                }
+            }
+            // Массовый перевод — отдельной строкой под заголовком: в одной
+            // строке с «таймкоды» текст заголовка ломался на две строки.
+            if (canTranslate && state.translations.isEmpty() || state.translatingAll) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                if (state.translatingAll) state.stopTranslateAll()
+                                else state.translateAll(result.replicas)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        ) {
+                            if (state.translatingAll) {
+                                // Спиннер вместо иконки: видно, что идёт работа,
+                                // и сколько реплик уже готово.
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 1.8.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Filled.Translate,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (state.translatingAll) {
+                                    "Остановить · ${state.translations.size}/${result.replicas.size}"
+                                } else {
+                                    "Перевести все реплики"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 }
             }
             // Пустая расшифровка — не «сломалось», а «в записи не нашлось речи».
@@ -582,7 +611,7 @@ private fun ExportBar(
             ) {
                 Icon(Icons.Filled.Description, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("TXT", style = MaterialTheme.typography.labelMedium)
+                Text("TXT", style = MaterialTheme.typography.labelMedium, maxLines = 1)
             }
             OutlinedButton(
                 onClick = onSrt,
@@ -591,7 +620,7 @@ private fun ExportBar(
             ) {
                 Icon(Icons.Filled.ClosedCaption, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("SRT", style = MaterialTheme.typography.labelMedium)
+                Text("SRT", style = MaterialTheme.typography.labelMedium, maxLines = 1)
             }
             OutlinedButton(
                 onClick = onNew,
@@ -600,7 +629,7 @@ private fun ExportBar(
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Новая", style = MaterialTheme.typography.labelMedium)
+                Text("Новая", style = MaterialTheme.typography.labelMedium, maxLines = 1)
             }
         }
     }

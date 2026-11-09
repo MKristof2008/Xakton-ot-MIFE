@@ -61,7 +61,7 @@ class LlmPost(private val context: Context) {
         val prompt = "Пунктуация и заглавные буквы, без изменений слов:\n" + text + "\nОтвет:\n"
         // Qwen любит дописать «Вот вариант: …» после готового текста.
         // Первая строка — сам ответ, остальное отбрасываем.
-        return LocalModel.generate(context, prompt, text.length / 2 + 96)
+        return LocalModel.generate(context, prompt, maxNewChars = text.length / 2 + 96)
             .substringBefore('\n')
             .trim()
     }
